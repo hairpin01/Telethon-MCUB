@@ -4,6 +4,7 @@ to convert between an entity like a User, Chat, etc. into its Input version)
 """
 import base64
 import binascii
+import functools
 import inspect
 import io
 import itertools
@@ -103,6 +104,14 @@ def get_display_name(entity):
     return ''
 
 
+@functools.lru_cache(maxsize=256)
+def _get_extension_from_mime(mime_type):
+    """Cached helper for mime_type to extension conversion."""
+    if mime_type == 'application/octet-stream':
+        return ''
+    return guess_extension(mime_type) or ''
+
+
 def get_extension(media):
     """Gets the corresponding extension for any Telegram media."""
 
@@ -120,11 +129,7 @@ def get_extension(media):
         media = media.document
     if isinstance(media, (
             types.Document, types.WebDocument, types.WebDocumentNoProxy)):
-        if media.mime_type == 'application/octet-stream':
-            # Octet stream are just bytes, which have no default extension
-            return ''
-        else:
-            return guess_extension(media.mime_type) or ''
+        return _get_extension_from_mime(media.mime_type)
 
     return ''
 

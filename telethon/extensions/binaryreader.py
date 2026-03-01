@@ -12,6 +12,14 @@ from ..tl.core import core_objects
 _EPOCH_NAIVE = datetime(*time.gmtime(0)[:6])
 _EPOCH = _EPOCH_NAIVE.replace(tzinfo=timezone.utc)
 
+_FMT_BYTE = struct.Struct('<B')
+_FMT_INT = struct.Struct('<i')
+_FMT_UINT = struct.Struct('<I')
+_FMT_LONG = struct.Struct('<q')
+_FMT_ULONG = struct.Struct('<Q')
+_FMT_FLOAT = struct.Struct('<f')
+_FMT_DOUBLE = struct.Struct('<d')
+
 
 class BinaryReader:
     """
@@ -29,33 +37,33 @@ class BinaryReader:
     # https://core.telegram.org/mtproto
     def read_byte(self):
         """Reads a single byte value."""
-        value, = struct.unpack_from("<B", self.stream, self.position)
+        value = _FMT_BYTE.unpack_from(self.stream, self.position)[0]
         self.position += 1
         return value
 
     def read_int(self, signed=True):
         """Reads an integer (4 bytes) value."""
-        fmt = '<i' if signed else '<I'
-        value, = struct.unpack_from(fmt, self.stream, self.position)
+        fmt = _FMT_INT if signed else _FMT_UINT
+        value = fmt.unpack_from(self.stream, self.position)[0]
         self.position += 4
         return value
 
     def read_long(self, signed=True):
         """Reads a long integer (8 bytes) value."""
-        fmt = '<q' if signed else '<Q'
-        value, = struct.unpack_from(fmt, self.stream, self.position)
+        fmt = _FMT_LONG if signed else _FMT_ULONG
+        value = fmt.unpack_from(self.stream, self.position)[0]
         self.position += 8
         return value
 
     def read_float(self):
         """Reads a real floating point (4 bytes) value."""
-        value, = struct.unpack_from("<f", self.stream, self.position)
+        value = _FMT_FLOAT.unpack_from(self.stream, self.position)[0]
         self.position += 4
         return value
 
     def read_double(self):
         """Reads a real floating point (8 bytes) value."""
-        value, = struct.unpack_from("<d", self.stream, self.position)
+        value = _FMT_DOUBLE.unpack_from(self.stream, self.position)[0]
         self.position += 8
         return value
 

@@ -36,6 +36,7 @@ def ensure_parent_dir_exists(file_path):
         os.makedirs(parent, exist_ok=True)
 
 
+@functools.lru_cache(maxsize=4096)
 def add_surrogate(text):
     return ''.join(
         # SMP -> Surrogate Pairs (Telegram offsets are calculated with these).
@@ -45,6 +46,7 @@ def add_surrogate(text):
     )
 
 
+@functools.lru_cache(maxsize=4096)
 def del_surrogate(text):
     return text.encode('utf-16', 'surrogatepass').decode('utf-16')
 
