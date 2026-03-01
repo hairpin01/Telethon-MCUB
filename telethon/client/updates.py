@@ -174,8 +174,9 @@ class UpdateMethods:
         """
         builders = events._get_handlers(callback)
         if builders is not None:
-            for event in builders:
-                self._event_builders.append((event, callback))
+            for ev in builders:
+                self._event_builders.append((ev, callback))
+                self._event_builders_by_type.setdefault(type(ev), []).append((ev, callback))
             return
 
         if isinstance(event, type):
@@ -184,6 +185,7 @@ class UpdateMethods:
             event = events.Raw()
 
         self._event_builders.append((event, callback))
+        self._event_builders_by_type.setdefault(type(event), []).append((event, callback))
 
     def middleware(self, func):
         """
@@ -240,6 +242,7 @@ class UpdateMethods:
             ev, cb = self._event_builders[i]
             if cb == callback and (not event or isinstance(ev, event)):
                 del self._event_builders[i]
+                self._event_builders_by_type.clear()  # Will be rebuilt on next dispatch
                 found += 1
 
         return found
@@ -607,50 +610,62 @@ class UpdateMethods:
                 if conv._custom:
                     await conv._check_custom(built)
 
-        for builder, callback in self._event_builders:
-            event = built[type(builder)]
+        # Build type->handlers mapping if empty (cleared on remove)
+        if not self._event_builders_by_type:
+            for builder, callback in self._event_builders:
+                self._event_builders_by_type.setdefault(type(builder), []).append((builder, callback))
+
+        # Dispatch using type mapping for O(1) lookup per event type
+        processed_types = set()
+        for builder_type, handlers in self._event_builders_by_type.items():
+            event = built.get(builder_type)
             if not event:
                 continue
+            processed_types.add(builder_type)
 
-            if not builder.resolved:
-                await builder.resolve(self)
+            for builder, callback in handlers:
+                if not builder.resolved:
+                    await builder.resolve(self)
 
-            filter = builder.filter(event)
-            if inspect.isawaitable(filter):
-                filter = await filter
-            if not filter:
-                continue
+                filter = builder.filter(event)
+                if inspect.isawaitable(filter):
+                    filter = await filter
+                if not filter:
+                    continue
 
-            try:
-                await self._middleware.process(event, callback)
-            except errors.AlreadyInConversationError:
-                name = getattr(callback, '__name__', repr(callback))
-                self._log[__name__].debug(
-                    'Event handler "%s" already has an open conversation, '
-                    'ignoring new one', name)
-            except events.StopPropagation:
-                name = getattr(callback, '__name__', repr(callback))
-                self._log[__name__].debug(
-                    'Event handler "%s" stopped chain of propagation '
-                    'for event %s.', name, type(event).__name__
-                )
-                break
-            except Exception as e:
-                if not isinstance(e, asyncio.CancelledError) or self.is_connected():
+                try:
+                    await self._middleware.process(event, callback)
+                except errors.AlreadyInConversationError:
                     name = getattr(callback, '__name__', repr(callback))
-                    self._log[__name__].exception('Unhandled exception on %s', name)
+                    self._log[__name__].debug(
+                        'Event handler "%s" already has an open conversation, '
+                        'ignoring new one', name)
+                except events.StopPropagation:
+                    name = getattr(callback, '__name__', repr(callback))
+                    self._log[__name__].debug(
+                        'Event handler "%s" stopped chain of propagation '
+                        'for event %s.', name, type(event).__name__
+                    )
+                    break
+                except Exception as e:
+                    if not isinstance(e, asyncio.CancelledError) or self.is_connected():
+                        name = getattr(callback, '__name__', repr(callback))
+                        self._log[__name__].exception('Unhandled exception on %s', name)
 
     async def _dispatch_event(self: 'TelegramClient', event):
         """
         Dispatches a single, out-of-order event. Used by `AlbumHack`.
         """
-        # We're duplicating a most logic from `_dispatch_update`, but all in
-        # the name of speed; we don't want to make it worse for all updates
-        # just because albums may need it.
-        for builder, callback in self._event_builders:
+        # Build type->handlers mapping if empty
+        if not self._event_builders_by_type:
+            for builder, callback in self._event_builders:
+                self._event_builders_by_type.setdefault(type(builder), []).append((builder, callback))
+
+        event_type = type(event)
+        handlers = self._event_builders_by_type.get(event_type, [])
+        
+        for builder, callback in handlers:
             if isinstance(builder, events.Raw):
-                continue
-            if not isinstance(event, builder.Event):
                 continue
 
             if not builder.resolved:

@@ -38,6 +38,9 @@ class SQLiteSession(MemorySession):
         self.filename = ':memory:'
         self.save_entities = True
         self.store_tmp_auth_key_on_disk = store_tmp_auth_key_on_disk
+        
+        # Entity cache for faster lookups (LRU-like, max 256 entries)
+        self._entity_cache = {}
 
         if session_id:
             self.filename = session_id
@@ -317,14 +320,38 @@ class SQLiteSession(MemorySession):
             rows = [row + now_tup for row in rows]
             c.executemany(
                 'insert or replace into entities values (?,?,?,?,?,?)', rows)
+            self._entity_cache.clear()  # Invalidate cache on entity save
         finally:
             c.close()
 
+    def _get_cached_entity(self, key):
+        """Get entity from cache if exists."""
+        return self._entity_cache.get(key)
+
+    def _set_cached_entity(self, key, value):
+        """Set entity in cache with LRU-like eviction."""
+        if len(self._entity_cache) >= 256:
+            # Remove oldest 64 entries (simple eviction)
+            for _ in range(64):
+                self._entity_cache.pop(next(iter(self._entity_cache)), None)
+        self._entity_cache[key] = value
+
     def get_entity_rows_by_phone(self, phone):
-        return self._execute(
+        cache_key = ('phone', phone)
+        cached = self._get_cached_entity(cache_key)
+        if cached is not None:
+            return cached
+        result = self._execute(
             'select id, hash from entities where phone = ?', phone)
+        self._set_cached_entity(cache_key, result)
+        return result
 
     def get_entity_rows_by_username(self, username):
+        cache_key = ('username', username)
+        cached = self._get_cached_entity(cache_key)
+        if cached is not None:
+            return cached
+        
         c = self._cursor()
         try:
             results = c.execute(
@@ -333,33 +360,50 @@ class SQLiteSession(MemorySession):
             ).fetchall()
 
             if not results:
-                return None
+                result = None
+            else:
+                # If there is more than one result for the same username, evict the oldest one
+                if len(results) > 1:
+                    results.sort(key=lambda t: t[2] or 0)
+                    c.executemany('update entities set username = null where id = ?',
+                                  [(t[0],) for t in results[:-1]])
 
-            # If there is more than one result for the same username, evict the oldest one
-            if len(results) > 1:
-                results.sort(key=lambda t: t[2] or 0)
-                c.executemany('update entities set username = null where id = ?',
-                              [(t[0],) for t in results[:-1]])
-
-            return results[-1][0], results[-1][1]
+                result = results[-1][0], results[-1][1]
+            
+            self._set_cached_entity(cache_key, result)
+            return result
         finally:
             c.close()
 
     def get_entity_rows_by_name(self, name):
-        return self._execute(
+        cache_key = ('name', name)
+        cached = self._get_cached_entity(cache_key)
+        if cached is not None:
+            return cached
+        result = self._execute(
             'select id, hash from entities where name = ?', name)
+        self._set_cached_entity(cache_key, result)
+        return result
 
     def get_entity_rows_by_id(self, id, exact=True):
+        cache_key = ('id', id, exact)
+        cached = self._get_cached_entity(cache_key)
+        if cached is not None:
+            return cached
+        
         if exact:
-            return self._execute(
+            result = self._execute(
                 'select id, hash from entities where id = ?', id)
         else:
-            return self._execute(
+            result = self._execute(
                 'select id, hash from entities where id in (?,?,?)',
                 utils.get_peer_id(PeerUser(id)),
                 utils.get_peer_id(PeerChat(id)),
                 utils.get_peer_id(PeerChannel(id))
             )
+        
+        self._set_cached_entity(cache_key, result)
+        return result
 
     # File processing
 

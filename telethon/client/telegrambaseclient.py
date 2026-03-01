@@ -401,6 +401,7 @@ class TelegramBaseClient(abc.ABC):
 
         # Some further state for subclasses
         self._event_builders = []
+        self._event_builders_by_type = {}  # type -> list of (builder, callback)
 
         # Middleware manager for event handlers
         from .middleware import MiddlewareManager
