@@ -1,36 +1,42 @@
-# https://snarky.ca/what-the-heck-is-pyproject-toml/
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
-# Need to use legacy format for the time being
-# https://tox.readthedocs.io/en/3.20.0/example/basic.html#pyproject-toml-tox-legacy-ini
-[tool.tox]
-legacy_tox_ini = """
-[tox]
-envlist = py35,py36,py37,py38
+[project]
+name = "Telethon-MCUB"
+dynamic = ["version"]
+description = "Full-featured Telegram client library for Python 3, forked for userbot use"
+readme = "README.rst"
+license = { text = "MIT" }
+authors = [
+    { name = "Lonami Exo", email = "totufals@hotmail.com" }
+]
+requires-python = ">=3.9"
+keywords = ["telegram", "api", "chat", "client", "library", "messaging", "mtproto", "userbot"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Communications :: Chat",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = ["pyaes", "rsa"]
 
-# run with tox -e py
-[testenv]
-deps =
-    -rrequirements.txt
-    -roptional-requirements.txt
-    -rdev-requirements.txt
-commands =
-    # NOTE: you can run any command line tool here - not just tests
-    pytest {posargs}
+[project.optional-dependencies]
+cryptg = ["cryptg"]
+socks = ["python-socks[asyncio]"]
 
-# run with tox -e flake
-[testenv:flake]
-deps =
-    -rrequirements.txt
-    -roptional-requirements.txt
-    -rdev-requirements.txt
-    flake8
-commands =
-    # stop the build if there are Python syntax errors or undefined names
-    flake8 telethon/ telethon_generator/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
-    # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-    flake8 telethon/ telethon_generator/ tests/ --count --exit-zero --exclude telethon/tl/,telethon/errors/rpcerrorlist.py --max-complexity=10 --max-line-length=127 --statistics
+[project.urls]
+Homepage = "https://github.com/hairpin01/Telethon-MCUB"
+Repository = "https://github.com/hairpin01/Telethon-MCUB"
+Issues = "https://github.com/hairpin01/Telethon-MCUB/issues"
 
-"""
+[tool.setuptools.dynamic]
+version = { attr = "telethon.version.__version__" }
+
+[tool.setuptools.packages.find]
+exclude = ["telethon_*", "tests*"]
