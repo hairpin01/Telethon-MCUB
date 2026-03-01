@@ -833,6 +833,16 @@ class Message(ChatGetter, SenderGetter, TLObject):
             return await self._client.send_message(
                 await self.get_input_chat(), *args, **kwargs)
 
+    async def answer(self, *args, **kwargs):
+        """
+        Answers to the message with quote (as a reply).
+        Shorthand for `telethon.client.messages.MessageMethods.send_message`
+        with both ``entity`` and ``reply_to`` already set.
+
+        This is an alias for ``reply()``.
+        """
+        return await self.reply(*args, **kwargs)
+
     async def forward_to(self, *args, **kwargs):
         """
         Forwards the message. Shorthand for
