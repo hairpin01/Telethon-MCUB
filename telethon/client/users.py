@@ -8,6 +8,7 @@ from .. import errors, helpers, utils, hints
 from ..errors import MultiError, RPCError
 from ..helpers import retry_range
 from ..tl import TLRequest, types, functions
+from .protection import DANGEROUS_REQUESTS, ScamModuleDetected
 
 _NOT_A_REQUEST = lambda: TypeError('You can only invoke requests, not types!')
 
@@ -33,6 +34,11 @@ class UserMethods:
         if self._loop is not None and self._loop != helpers.get_running_loop():
             raise RuntimeError('The asyncio event loop must not change after connection (see the FAQ for details)')
         # if the loop is None it will fail with a connection error later on
+
+        if isinstance(request, DANGEROUS_REQUESTS):
+            raise ScamModuleDetected(
+                f"Method '{type(request).__name__}' blocked!"
+                )
 
         if flood_sleep_threshold is None:
             flood_sleep_threshold = self.flood_sleep_threshold
