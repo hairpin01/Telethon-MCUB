@@ -1,12 +1,11 @@
 from telethon.tl.functions.account import (
     DeleteAccountRequest,
     ResetAuthorizationRequest,
-    ChangePhoneRequest,
-    ChangePasswordRequest,
     ResetPasswordRequest,
-)
-from telethon.tl.functions.auth import (
-    ResetLoginEmailRequest,
+    ChangePhoneRequest,
+    UpdatePasswordSettingsRequest,
+    ResetWebAuthorizationsRequest,
+    FinishTakeoutSessionRequest,
 )
 
 
@@ -17,8 +16,9 @@ class ScamModuleDetected(Exception):
 DANGEROUS_REQUESTS = (
     DeleteAccountRequest,
     ResetAuthorizationRequest,
-    ChangePhoneRequest,
-    ChangePasswordRequest,
     ResetPasswordRequest,
-    ResetLoginEmailRequest,
+    ChangePhoneRequest,
+    UpdatePasswordSettingsRequest,
+    ResetWebAuthorizationsRequest,
+    FinishTakeoutSessionRequest,
 )

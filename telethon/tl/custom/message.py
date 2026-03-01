@@ -885,9 +885,10 @@ class Message(ChatGetter, SenderGetter, TLObject):
         """
         if 'link_preview' not in kwargs:
             kwargs['link_preview'] = bool(self.web_preview)
-
         if 'buttons' not in kwargs:
             kwargs['buttons'] = self.reply_markup
+        if 'invert_media' not in kwargs:
+            kwargs['invert_media'] = bool(self.invert_media)  # fixed
 
         return await self._client.edit_message(
             await self.get_input_chat(), self.id,

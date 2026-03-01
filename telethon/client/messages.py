@@ -1097,7 +1097,8 @@ class MessageMethods:
             force_document: bool = False,
             buttons: typing.Optional['hints.MarkupLike'] = None,
             supports_streaming: bool = False,
-            schedule: 'hints.DateLike' = None
+            schedule: 'hints.DateLike' = None,
+            invert_media: bool = False
     ) -> 'types.Message':
         """
         Edits the given message to change its text or media.
@@ -1255,7 +1256,8 @@ class MessageMethods:
             entities=formatting_entities,
             media=media,
             reply_markup=self.build_reply_markup(buttons),
-            schedule_date=schedule
+            schedule_date=schedule,
+            invert_media=invert_media
         )
         msg = self._get_response_message(request, await self(request), entity)
         return msg

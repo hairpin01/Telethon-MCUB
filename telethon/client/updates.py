@@ -185,6 +185,26 @@ class UpdateMethods:
 
         self._event_builders.append((event, callback))
 
+    def middleware(self, func):
+        """
+        Register a middleware that runs before every event handler.
+
+        Example::
+
+            @client.middleware
+            async def log_all(event, next):
+                print(f'Event: {type(event).__name__}')
+                await next()
+
+            @client.middleware
+            async def blacklist(event, next):
+                if getattr(event, 'sender_id', None) in BLACKLIST:
+                    return  # drop, handler never runs
+                await next()
+        """
+        self._middleware.add(func)
+        return func
+
     def remove_event_handler(
             self: 'TelegramClient',
             callback: Callback,
@@ -602,7 +622,7 @@ class UpdateMethods:
                 continue
 
             try:
-                await callback(event)
+                await self._middleware.process(event, callback)
             except errors.AlreadyInConversationError:
                 name = getattr(callback, '__name__', repr(callback))
                 self._log[__name__].debug(
@@ -643,7 +663,7 @@ class UpdateMethods:
                 continue
 
             try:
-                await callback(event)
+                await self._middleware.process(event, callback)
             except errors.AlreadyInConversationError:
                 name = getattr(callback, '__name__', repr(callback))
                 self._log[__name__].debug(
