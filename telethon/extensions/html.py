@@ -1,6 +1,7 @@
 """
 Simple HTML -> Telegram entity parser.
 """
+import functools
 from collections import deque
 from html import escape
 from html.parser import HTMLParser
@@ -13,11 +14,29 @@ from ..tl.types import (
     MessageEntityPre, MessageEntityEmail, MessageEntityUrl,
     MessageEntityTextUrl, MessageEntityMentionName,
     MessageEntityUnderline, MessageEntityStrike, MessageEntityBlockquote,
-    MessageEntityCustomEmoji, TypeMessageEntity
+    MessageEntityCustomEmoji, MessageEntitySpoiler, TypeMessageEntity
 )
+
+_TAG_TO_ENTITY = {
+    'strong': MessageEntityBold,
+    'b': MessageEntityBold,
+    'em': MessageEntityItalic,
+    'i': MessageEntityItalic,
+    'u': MessageEntityUnderline,
+    'del': MessageEntityStrike,
+    's': MessageEntityStrike,
+    'blockquote': MessageEntityBlockquote,
+    'code': MessageEntityCode,
+    'pre': MessageEntityPre,
+    'tg-emoji': MessageEntityCustomEmoji,
+}
+
+_MAILTO_LEN = len('mailto:')
 
 
 class HTMLToTelegramParser(HTMLParser):
+    __slots__ = ('text', 'entities', '_building_entities', '_open_tags', '_open_tags_meta')
+
     def __init__(self):
         super().__init__()
         self.text = ''
@@ -30,44 +49,18 @@ class HTMLToTelegramParser(HTMLParser):
         self._open_tags.appendleft(tag)
         self._open_tags_meta.appendleft(None)
 
-        attrs = dict(attrs)
-        EntityType = None
+        attrs_dict = dict(attrs)
+        EntityType = _TAG_TO_ENTITY.get(tag)
         args = {}
-        if tag == 'strong' or tag == 'b':
-            EntityType = MessageEntityBold
-        elif tag == 'em' or tag == 'i':
-            EntityType = MessageEntityItalic
-        elif tag == 'u':
-            EntityType = MessageEntityUnderline
-        elif tag == 'del' or tag == 's':
-            EntityType = MessageEntityStrike
-        elif tag == 'blockquote':
-            EntityType = MessageEntityBlockquote
-        elif tag == 'code':
-            try:
-                # If we're in the middle of a <pre> tag, this <code> tag is
-                # probably intended for syntax highlighting.
-                #
-                # Syntax highlighting is set with
-                #     <code class='language-...'>codeblock</code>
-                # inside <pre> tags
-                pre = self._building_entities['pre']
-                try:
-                    pre.language = attrs['class'][len('language-'):]
-                except KeyError:
-                    pass
-            except KeyError:
-                EntityType = MessageEntityCode
-        elif tag == 'pre':
-            EntityType = MessageEntityPre
+
+        if tag == 'pre':
             args['language'] = ''
         elif tag == 'a':
-            try:
-                url = attrs['href']
-            except KeyError:
+            url = attrs_dict.get('href')
+            if url is None:
                 return
             if url.startswith('mailto:'):
-                url = url[len('mailto:'):]
+                url = url[_MAILTO_LEN:]
                 EntityType = MessageEntityEmail
             else:
                 if self.get_starttag_text() == url:
@@ -79,18 +72,27 @@ class HTMLToTelegramParser(HTMLParser):
             self._open_tags_meta.popleft()
             self._open_tags_meta.appendleft(url)
         elif tag == 'tg-emoji':
-            try:
-                emoji_id = int(attrs['emoji-id'])
-            except (KeyError, ValueError):
+            emoji_id = attrs_dict.get('emoji-id')
+            if emoji_id is None:
                 return
+            try:
+                args['document_id'] = int(emoji_id)
+            except ValueError:
+                return
+        elif tag == 'blockquote':
+            expandable = attrs_dict.get('expandable', '').lower()
+            if expandable == 'true':
+                args['collapsed'] = False
+        elif tag == 'code' and 'pre' in self._building_entities:
+            pre = self._building_entities['pre']
+            cls = attrs_dict.get('class', '')
+            if cls.startswith('language-'):
+                pre.language = cls[9:]
+            EntityType = None
 
-            EntityType = MessageEntityCustomEmoji
-            args['document_id'] = emoji_id
-            
         if EntityType and tag not in self._building_entities:
             self._building_entities[tag] = EntityType(
                 offset=len(self.text),
-                # The length will be determined when closing the tag.
                 length=0,
                 **args)
 
@@ -142,7 +144,10 @@ ENTITY_TO_FORMATTER = {
     MessageEntityCode: ('<code>', '</code>'),
     MessageEntityUnderline: ('<u>', '</u>'),
     MessageEntityStrike: ('<del>', '</del>'),
-    MessageEntityBlockquote: ('<blockquote>', '</blockquote>'),
+    MessageEntityBlockquote: lambda e, _: (
+        '<blockquote expandable="true">' if e.collapsed is False else '<blockquote>',
+        '</blockquote>'
+    ),
     MessageEntityPre: lambda e, _: (
         "<pre>\n"
         "    <code class='language-{}'>\n"
