@@ -79,3 +79,13 @@ def test_offset_at_emoji():
 
     assert html.parse(parsed) == (text, entities)
     assert html.unparse(text, entities) == parsed
+
+
+def test_blockquote_expandable_none():
+    """
+    Test that blockquote with expandable=None doesn't crash.
+    This can happen when the HTML parser passes None as attribute value.
+    """
+    text, entities = html.parse('<blockquote expandable>test</blockquote>')
+    assert text == 'test'
+    assert len(entities) == 1

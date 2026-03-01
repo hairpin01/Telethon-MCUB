@@ -80,7 +80,8 @@ class HTMLToTelegramParser(HTMLParser):
             except ValueError:
                 return
         elif tag == 'blockquote':
-            expandable = attrs_dict.get('expandable', '').lower()
+            expandable = attrs_dict.get('expandable') or ''
+            expandable = expandable.lower() if expandable else ''
             if expandable == 'true':
                 args['collapsed'] = False
         elif tag == 'code' and 'pre' in self._building_entities:
