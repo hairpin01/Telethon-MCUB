@@ -764,5 +764,12 @@ class EventBuilderDict:
                 event._set_client(self.client)
             elif event:
                 event._client = self.client
+            return event
+
+    def get(self, builder, default=None):
+        try:
+            return self[builder]
+        except (KeyError, AttributeError):
+            return default
 
             return event
