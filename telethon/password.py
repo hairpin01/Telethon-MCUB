@@ -11,7 +11,8 @@ def check_prime_and_good_check(prime: int, g: int):
         raise ValueError('bad prime count {}, expected {}'
                          .format(prime.bit_length(), good_prime_bits_count))
 
-    # TODO This is awfully slow
+    # WARNING: This factorization is slow and blocks the event loop
+    # Consider running in thread pool for better performance
     if factorization.Factorization.factorize(prime)[0] != 1:
         raise ValueError('given "prime" is not prime')
 

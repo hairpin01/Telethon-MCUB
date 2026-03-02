@@ -537,7 +537,8 @@ class TelegramBaseClient(abc.ABC):
         # event loops lack this method. If the current loop is missing it,
         # bail out early and suggest an alternative.
         #
-        # TODO A better fix is obviously avoiding the use of `sock_connect`
+        # WARNING: Proxy support is broken with some event loops
+        # See https://github.com/LonamiWebs/Telethon/issues/1337
         #
         # See https://github.com/LonamiWebs/Telethon/issues/1337 for details.
         if not callable(getattr(self._loop, 'sock_connect', None)):

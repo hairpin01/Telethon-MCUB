@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import io
 import itertools
@@ -5,6 +6,7 @@ import os
 import pathlib
 import re
 import typing
+from collections import deque
 from io import BytesIO
 
 from ..crypto import AES
@@ -866,5 +868,71 @@ class UploadMethods:
                 nosound_video=nosound_video
             )
         return file_handle, media, as_image
+
+    async def upload_files(
+            self: 'TelegramClient',
+            files: typing.List[typing.Tuple['hints.FileLike', typing.Dict]],
+            *,
+            parallel: int = 1,
+            progress_callback: typing.Callable[[int, int, int], typing.Awaitable] = None
+    ) -> typing.List[typing.Optional['types.TypeInputFile']]:
+        """
+        Upload multiple files in queue.
+
+        Arguments
+            files (list):
+                List of tuples (file, kwargs) where file is the file path/bytes/stream
+                and kwargs are the arguments to pass to upload_file.
+
+            parallel (int, optional):
+                Number of files to upload in parallel. Default is 1 (sequential).
+                Use higher values for faster parallel uploads.
+
+            progress_callback (callable, optional):
+                Callback function accepting (completed, total, current_file_index).
+                Called after each file upload completes.
+
+        Returns
+            List of InputFile handles.
+
+        Example
+            .. code-block:: python
+
+                files = [
+                    ('photo1.jpg', {}),
+                    ('photo2.jpg', {}),
+                    ('document.pdf', {'file_name': 'doc.pdf'}),
+                ]
+                results = await client.upload_files(files, parallel=2)
+        """
+        if parallel < 1:
+            parallel = 1
+
+        semaphore = asyncio.Semaphore(parallel)
+        results = [None] * len(files)
+        completed = 0
+
+        async def upload_with_semaphore(index, file_path, kwargs):
+            nonlocal completed
+            async with semaphore:
+                try:
+                    result = await self.upload_file(
+                        file_path,
+                        **kwargs
+                    )
+                    results[index] = result
+                except Exception as e:
+                    results[index] = None
+                finally:
+                    completed += 1
+                    if progress_callback:
+                        await progress_callback(completed, len(files), index)
+
+        tasks = []
+        for i, (file_path, kwargs) in enumerate(files):
+            tasks.append(upload_with_semaphore(i, file_path, kwargs))
+
+        await asyncio.gather(*tasks)
+        return results
 
     # endregion

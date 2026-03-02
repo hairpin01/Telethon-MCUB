@@ -1315,11 +1315,12 @@ class MessageMethods:
         if not utils.is_list_like(message_ids):
             message_ids = (message_ids,)
 
-        message_ids = (
-            m.id if isinstance(m, (
-                types.Message, types.MessageService, types.MessageEmpty))
+        inline_types = (types.InputBotInlineMessageID, types.InputBotInlineMessageID64)
+        message_ids = [
+            m.id if isinstance(m, inline_types) else
+            m.id if isinstance(m, (types.Message, types.MessageService, types.MessageEmpty))
             else int(m) for m in message_ids
-        )
+        ]
 
         if entity:
             entity = await self.get_input_entity(entity)
@@ -1522,6 +1523,74 @@ class MessageMethods:
 
         # Pinning a message that doesn't exist would RPC-error earlier
         return self._get_response_message(request, result, entity)
+
+    async def translate(
+            self: 'TelegramClient',
+            peer: 'hints.DialogLike',
+            message: 'hints.MessageIDLike',
+            to_lang: str,
+            raw_text: typing.Optional[str] = None,
+            entities: typing.Optional[typing.List[types.MessageEntity]] = None,
+    ) -> str:
+        """
+        Translates a message to the specified language.
+
+        Arguments
+            peer (`entity`):
+                The chat where the message is located.
+
+            message (`int` | `Message`):
+                The message or its ID to translate.
+
+            to_lang (`str`):
+                The language to translate the message to (e.g., "en", "ru").
+
+            raw_text (`str`, optional):
+                Raw text to translate instead of the message text.
+
+            entities (`list`, optional):
+                Message entities to translate.
+
+        Returns
+            The translated text as a string.
+
+        Example
+            .. code-block:: python
+
+                # Translate message to English
+                result = await client.translate(chat, message_id, 'en')
+        """
+        from .. import extensions
+
+        msg_id = utils.get_message_id(message) or 0
+        if not msg_id:
+            return None
+
+        if not isinstance(message, types.Message):
+            message = (await self.get_messages(peer, ids=[msg_id]))[0]
+
+        result = await self(
+            functions.messages.TranslateTextRequest(
+                peer=peer,
+                id=[msg_id],
+                text=[
+                    types.TextWithEntities(
+                        raw_text or message.raw_text,
+                        entities or message.entities or [],
+                    )
+                ],
+                to_lang=to_lang,
+            )
+        )
+
+        return (
+            extensions.html.unparse(
+                result.result[0].text,
+                result.result[0].entities,
+            )
+            if result and result.result
+            else ""
+        )
 
     # endregion
 

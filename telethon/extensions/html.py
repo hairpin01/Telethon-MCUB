@@ -29,6 +29,7 @@ _TAG_TO_ENTITY = {
     'code': MessageEntityCode,
     'pre': MessageEntityPre,
     'tg-emoji': MessageEntityCustomEmoji,
+    'tg-spoiler': MessageEntitySpoiler,
 }
 
 _MAILTO_LEN = len('mailto:')
@@ -52,6 +53,8 @@ class HTMLToTelegramParser(HTMLParser):
         attrs_dict = dict(attrs)
         EntityType = _TAG_TO_ENTITY.get(tag)
         args = {}
+
+        has_expandable = any(k == 'expandable' for k, v in attrs)
 
         if tag == 'pre':
             args['language'] = ''
@@ -79,11 +82,24 @@ class HTMLToTelegramParser(HTMLParser):
                 args['document_id'] = int(emoji_id)
             except ValueError:
                 return
+        elif tag == 'emoji':
+            document_id = attrs_dict.get('document_id')
+            if document_id is None:
+                return
+            try:
+                args['document_id'] = int(document_id)
+            except ValueError:
+                return
+            EntityType = MessageEntityCustomEmoji
         elif tag == 'blockquote':
-            expandable = attrs_dict.get('expandable') or ''
-            expandable = expandable.lower() if expandable else ''
-            if expandable == 'true':
-                args['collapsed'] = False
+            if has_expandable:
+                expandable_value = attrs_dict.get('expandable')
+                if expandable_value in ('', None, 'true'):
+                    args['collapsed'] = False
+                else:
+                    args['collapsed'] = True
+            else:
+                args['collapsed'] = None
         elif tag == 'code' and 'pre' in self._building_entities:
             pre = self._building_entities['pre']
             cls = attrs_dict.get('class', '')
@@ -98,23 +114,24 @@ class HTMLToTelegramParser(HTMLParser):
                 **args)
 
     def handle_data(self, text):
-        previous_tag = self._open_tags[0] if len(self._open_tags) > 0 else ''
-        if previous_tag == 'a':
-            url = self._open_tags_meta[0]
-            if url:
-                text = url
-
         for tag, entity in self._building_entities.items():
             entity.length += len(text)
 
         self.text += text
 
     def handle_endtag(self, tag):
-        try:
+        if self._open_tags and self._open_tags[0] == tag:
             self._open_tags.popleft()
             self._open_tags_meta.popleft()
-        except IndexError:
-            pass
+        elif tag in self._open_tags:
+            idx = list(self._open_tags).index(tag)
+            open_tags_list = list(self._open_tags)
+            open_tags_meta_list = list(self._open_tags_meta)
+            del open_tags_list[idx]
+            del open_tags_meta_list[idx]
+            self._open_tags = deque(open_tags_list)
+            self._open_tags_meta = deque(open_tags_meta_list)
+
         entity = self._building_entities.pop(tag, None)
         if entity:
             self.entities.append(entity)
@@ -139,16 +156,26 @@ def parse(html: str) -> Tuple[str, List[TypeMessageEntity]]:
     return del_surrogate(text), parser.entities
 
 
+def _make_blockquote_formatter():
+    def formatter(e, _text):
+        if e.collapsed is False:
+            return '<blockquote expandable>', '</blockquote>'
+        elif e.collapsed is True:
+            return '<blockquote expandable="false">', '</blockquote>'
+        else:
+            return '<blockquote>', '</blockquote>'
+    return formatter
+
+_blockquote_formatter = _make_blockquote_formatter()
+
 ENTITY_TO_FORMATTER = {
     MessageEntityBold: ('<strong>', '</strong>'),
     MessageEntityItalic: ('<em>', '</em>'),
     MessageEntityCode: ('<code>', '</code>'),
     MessageEntityUnderline: ('<u>', '</u>'),
     MessageEntityStrike: ('<del>', '</del>'),
-    MessageEntityBlockquote: lambda e, _: (
-        '<blockquote expandable="true">' if e.collapsed is False else '<blockquote>',
-        '</blockquote>'
-    ),
+    MessageEntitySpoiler: ('<tg-spoiler>', '</tg-spoiler>'),
+    MessageEntityBlockquote: _blockquote_formatter,
     MessageEntityPre: lambda e, _: (
         "<pre>\n"
         "    <code class='language-{}'>\n"
@@ -156,12 +183,17 @@ ENTITY_TO_FORMATTER = {
         "    </code>\n"
         "</pre>"
     ),
-    MessageEntityEmail: lambda _, t: ('<a href="mailto:{}">'.format(t), '</a>'),
-    MessageEntityUrl: lambda _, t: ('<a href="{}">'.format(t), '</a>'),
+    MessageEntityEmail: lambda _, t: ('<a href="mailto:{}">'.format(escape(t)), '</a>'),
+    MessageEntityUrl: lambda _, t: ('<a href="{}">'.format(escape(del_surrogate(t))), '</a>'),
     MessageEntityTextUrl: lambda e, _: ('<a href="{}">'.format(escape(e.url)), '</a>'),
     MessageEntityMentionName: lambda e, _: ('<a href="tg://user?id={}">'.format(e.user_id), '</a>'),
     MessageEntityCustomEmoji: lambda e, _: ('<tg-emoji emoji-id="{}">'.format(e.document_id), '</tg-emoji>'),
 }
+
+
+class _TagWrapper:
+    def __init__(self, text):
+        self.text = text
 
 
 def unparse(text: str, entities: Iterable[TypeMessageEntity]) -> str:
@@ -190,18 +222,20 @@ def unparse(text: str, entities: Iterable[TypeMessageEntity]) -> str:
         if delimiter:
             if callable(delimiter):
                 delimiter = delimiter(entity, text[s:e])
-            insert_at.append((s, i, delimiter[0]))
-            insert_at.append((e, -i, delimiter[1]))
+            insert_at.append((s, i, _TagWrapper(delimiter[0])))
+            insert_at.append((e, -i, _TagWrapper(delimiter[1])))
 
     insert_at.sort(key=lambda t: (t[0], t[1]))
     next_escape_bound = len(text)
     while insert_at:
-        # Same logic as markdown.py
         at, _, what = insert_at.pop()
         while within_surrogate(text, at):
             at += 1
 
-        text = text[:at] + what + escape(text[at:next_escape_bound]) + text[next_escape_bound:]
+        if isinstance(what, _TagWrapper):
+            text = text[:at] + what.text + escape(text[at:next_escape_bound]) + text[next_escape_bound:]
+        else:
+            text = text[:at] + what + escape(text[at:next_escape_bound]) + text[next_escape_bound:]
         next_escape_bound = at
 
     text = escape(text[:next_escape_bound]) + text[next_escape_bound:]

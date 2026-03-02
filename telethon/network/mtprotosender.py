@@ -422,18 +422,20 @@ class MTProtoSender:
 
     def _start_reconnect(self, error):
         """Starts a reconnection in the background."""
+        async def _do_reconnect():
+            async with self._connect_lock:
+                if not self._user_connected or self._reconnecting:
+                    return
+                self._reconnecting = True
+                try:
+                    await self._reconnect(error)
+                finally:
+                    self._reconnecting = False
+
         if self._user_connected and not self._reconnecting:
-            # We set reconnecting to True here and not inside the new task
-            # because it may happen that send/recv loop calls this again
-            # while the new task hasn't had a chance to run yet. This race
-            # condition puts `self.connection` in a bad state with two calls
-            # to its `connect` without disconnecting, so it creates a second
-            # receive loop. There can't be two tasks receiving data from
-            # the reader, since that causes an error, and the library just
-            # gets stuck.
-            # TODO It still gets stuck? Investigate where and why.
-            self._reconnecting = True
-            helpers.get_running_loop().create_task(self._reconnect(error))
+            # Use lock to prevent race condition with dual reconnect attempts
+            # which can cause deadlocks on network issues
+            helpers.get_running_loop().create_task(_do_reconnect())
 
     def _keepalive_ping(self, rnd_id):
         """
@@ -780,7 +782,8 @@ class MTProtoSender:
             self._log.info('System clock is wrong, set time offset to %ds', to)
         elif bad_msg.error_code == 32:
             # msg_seqno too low, so just pump it up by some "large" amount
-            # TODO A better fix would be to start with a new fresh session ID
+            # WARNING: Current workaround may cause issues with message ordering
+            # A better fix would be to start with a new fresh session ID
             self._state._sequence += 64
         elif bad_msg.error_code == 33:
             # msg_seqno too high never seems to happen but just in case

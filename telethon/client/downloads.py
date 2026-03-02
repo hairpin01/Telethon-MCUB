@@ -71,7 +71,8 @@ class _DirectDownloadIter(RequestIter):
                         await utils.maybe_async(self.client.session.save())
                         break
 
-                # TODO Figure out why the session may have the wrong DC ID
+                # WARNING: Session may have wrong DC ID - this is a known issue
+                # that can cause download failures. See issue #4289
                 self._sender = self.client._sender
                 self._exported = False
 
@@ -111,8 +112,18 @@ class _DirectDownloadIter(RequestIter):
 
         except errors.FileMigrateError as e:
             self.client._log[__name__].info('File lives in another DC')
+            old_sender = self._sender
+            old_exported = self._exported
             self._sender = await self.client._borrow_exported_sender(e.new_dc)
             self._exported = True
+            if old_sender and old_sender != self.client._sender:
+                try:
+                    if old_exported:
+                        await self.client._return_exported_sender(old_sender)
+                    else:
+                        await old_sender.disconnect()
+                except Exception:
+                    pass
             return await self._request()
 
         except (errors.FilerefUpgradeNeededError, errors.FileReferenceExpiredError) as e:
@@ -207,7 +218,7 @@ class _GenericDownloadIter(_DirectDownloadIter):
 
             # 3. Be careful with the offsets. Re-fetching a bit of data
             #    is fine, since it greatly simplifies things.
-            # TODO Try to not re-fetch data
+            # WARNING: This causes additional network requests - potential performance issue
             self.request.offset -= self._stride
 
 

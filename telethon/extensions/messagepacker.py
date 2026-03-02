@@ -27,6 +27,7 @@ class MessagePacker:
         self._deque = collections.deque()
         self._ready = asyncio.Event()
         self._log = loggers[__name__]
+        self._buffer = bytearray()
 
     def append(self, state):
         self._deque.append(state)

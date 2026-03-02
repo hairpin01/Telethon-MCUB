@@ -8,6 +8,7 @@ the Python implementation will be used.
 import os
 import pyaes
 import logging
+from functools import lru_cache
 from . import libssl
 
 
@@ -24,6 +25,12 @@ except ImportError:
     else:
         __log__.info('cryptg module not installed and libssl not found, '
                      'falling back to (slower) Python encryption')
+
+
+@lru_cache(maxsize=128)
+def _get_aes_cache(key):
+    """Cache AES instances for repeated use with same key"""
+    return pyaes.AES(key)
 
 
 class AES:
@@ -45,26 +52,25 @@ class AES:
         iv1 = iv[:len(iv) // 2]
         iv2 = iv[len(iv) // 2:]
 
-        aes = pyaes.AES(key)
+        aes = _get_aes_cache(key)
 
-        plain_text = []
         blocks_count = len(cipher_text) // 16
+        plain_text = bytearray(blocks_count * 16)
 
-        cipher_text_block = [0] * 16
         for block_index in range(blocks_count):
-            for i in range(16):
-                cipher_text_block[i] = \
-                    cipher_text[block_index * 16 + i] ^ iv2[i]
-
-            plain_text_block = aes.decrypt(cipher_text_block)
-
+            start = block_index * 16
+            chunk = cipher_text[start:start + 16]
+            
+            xored = bytes(chunk[i] ^ iv2[i] for i in range(16))
+            plain_text_block = list(aes.decrypt(xored))
+            
             for i in range(16):
                 plain_text_block[i] ^= iv1[i]
 
-            iv1 = cipher_text[block_index * 16:block_index * 16 + 16]
-            iv2 = plain_text_block
-
-            plain_text.extend(plain_text_block)
+            plain_text[start:start + 16] = plain_text_block
+            
+            iv1 = chunk
+            iv2 = bytes(plain_text_block)
 
         return bytes(plain_text)
 
@@ -86,26 +92,24 @@ class AES:
         iv1 = iv[:len(iv) // 2]
         iv2 = iv[len(iv) // 2:]
 
-        aes = pyaes.AES(key)
+        aes = _get_aes_cache(key)
 
-        cipher_text = []
         blocks_count = len(plain_text) // 16
+        cipher_text = bytearray(blocks_count * 16)
 
         for block_index in range(blocks_count):
-            plain_text_block = list(
-                plain_text[block_index * 16:block_index * 16 + 16]
-            )
-            for i in range(16):
-                plain_text_block[i] ^= iv1[i]
-
-            cipher_text_block = aes.encrypt(plain_text_block)
-
+            start = block_index * 16
+            chunk = plain_text[start:start + 16]
+            
+            xored = bytes(chunk[i] ^ iv1[i] for i in range(16))
+            cipher_text_block = list(aes.encrypt(xored))
+            
             for i in range(16):
                 cipher_text_block[i] ^= iv2[i]
 
-            iv1 = cipher_text_block
-            iv2 = plain_text[block_index * 16:block_index * 16 + 16]
-
-            cipher_text.extend(cipher_text_block)
+            cipher_text[start:start + 16] = cipher_text_block
+            
+            iv1 = bytes(cipher_text_block)
+            iv2 = chunk
 
         return bytes(cipher_text)
