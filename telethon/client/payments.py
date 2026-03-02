@@ -9,9 +9,11 @@ class GiftMethods:
     async def _get_input_stargift(self, owned_gift_id: str) -> "types.TypeInputSavedStarGift":
         if not isinstance(owned_gift_id, str):
             raise ValueError(f"owned_gift_id has to be str, but {type(owned_gift_id)} was provided")
-        
+
         saved_gift_match = re.compile(r"^(-\d+)_(\d+)$").match(owned_gift_id)
-        slug_match = re.compile(r"^(?:https?://)?(?:www\.)?(?:t(?:elegram)?\.(?:org|me|dog)/(?:nft/|\+))([\w-]+)$").match(owned_gift_id)
+        slug_match = re.compile(
+            r"^(?:https?://)?(?:www\.)?(?:t(?:elegram)?\.(?:org|me|dog)/(?:nft/|\+))([\w-]+)$"
+        ).match(owned_gift_id)
 
         if saved_gift_match:
             return types.InputSavedStarGiftChat(
@@ -27,7 +29,6 @@ class GiftMethods:
                 msg_id=int(owned_gift_id)
             )
 
-
     async def get_saved_gifts(
             self,
             peer: 'hints.EntityLike',
@@ -42,7 +43,7 @@ class GiftMethods:
             limit: int = 0,
             offset: str = "",
     ) -> 'typing.AsyncGenerator["custom.StarGift", None]':
-        
+
         current = 0
         total = limit or (1 << 31) - 1
         limit = min(100, limit)
@@ -72,7 +73,7 @@ class GiftMethods:
 
             if not gifts:
                 return
-            
+
             for gift in gifts:
                 yield gift
 
@@ -80,12 +81,11 @@ class GiftMethods:
 
                 if current >= total:
                     return
-                
+
             offset = r.next_offset
 
             if not offset:
                 return
-
 
     async def upgrade_gift(
             self,
