@@ -6,6 +6,7 @@ import warnings
 from .. import helpers, utils, errors, hints
 from ..requestiter import RequestIter
 from ..tl import types, functions
+from ..tl.tlobject import RESTRICT_IDS
 
 _MAX_CHUNK_SIZE = 100
 
@@ -1062,9 +1063,40 @@ class MessageMethods:
             chunk = list(chunk)
             if isinstance(chunk[0], int):
                 chat = from_peer
+                if from_peer_id is not None:
+                    try:
+                        orig_id, _ = utils.resolve_id(from_peer_id)
+                    except Exception:
+                        orig_id = from_peer_id
+                    if orig_id in RESTRICT_IDS:
+                        raise ValueError('Forwarding from this peer is forbidden')
             else:
                 chat = from_peer or await self.get_input_entity(chunk[0].peer_id)
+                original_msgs = list(chunk)
                 chunk = [m.id for m in chunk]
+
+                for m in original_msgs:
+                    try:
+                        fwd = getattr(m, 'fwd_from', None)
+                        if fwd and getattr(fwd, 'from_id', None):
+                            orig = fwd.from_id
+                        else:
+                            orig = getattr(m, 'from_id', None)
+
+                        if orig is None:
+                            continue
+
+                        try:
+                            orig_id = utils.get_peer_id(orig, add_mark=False)
+                        except Exception:
+                            orig_id = orig if isinstance(orig, int) else None
+
+                        if orig_id in RESTRICT_IDS:
+                            raise ValueError('Forwarding messages from this user is forbidden')
+                    except ValueError:
+                        raise
+                    except Exception:
+                        continue
 
             req = functions.messages.ForwardMessagesRequest(
                 from_peer=chat,

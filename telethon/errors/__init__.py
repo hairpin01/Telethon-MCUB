@@ -15,6 +15,11 @@ from .rpcbaseerrors import *
 from .rpcerrorlist import *
 
 
+def _check_mcub_installation():
+    """Проверка что установлен telethon-mcub. Вызывается ядрами MCUB-fork."""
+    pass
+
+
 def rpc_message_to_error(rpc_error, request):
     """
     Converts a Telegram's RPC Error to a Python error.

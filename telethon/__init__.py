@@ -11,3 +11,13 @@ __all__ = [
     'types', 'functions', 'custom', 'errors',
     'events', 'utils', 'connection'
 ]
+
+
+class McubTelethonError(Exception):
+    """Ошибка для MCUB - вызывается если telethon-mcub не установлен"""
+    pass
+
+
+def _check_mcub_installation():
+    """Проверка что установлен telethon-mcub. Вызывается ядрами MCUB-fork."""
+    pass

@@ -7,6 +7,7 @@ from .forward import Forward
 from .file import File
 from .. import TLObject, types, functions, alltlobjects
 from ... import utils, errors
+from ...tl.tlobject import RESTRICT_IDS, DUMMY_MESSAGE_KWARGS
 
 
 # TODO Figure out a way to have the code generator error on missing fields
@@ -300,6 +301,21 @@ class Message(ChatGetter, SenderGetter, TLObject):
             # (layer 119+), but the sender can only be the chat we're in.
             if post or (not out and isinstance(peer_id, types.PeerUser)):
                 sender_id = utils.get_peer_id(peer_id)
+
+        # Hide messages from RESTRICT_IDS
+        if (
+            from_id is not None
+            and (
+                _from_id := getattr(self, "from_id", None)
+                or getattr(self, "peer_id", None)
+            )
+        ):
+            all_values = _from_id.to_dict().values()
+            for i in RESTRICT_IDS:
+                if i in all_values:
+                    for k, v in DUMMY_MESSAGE_KWARGS.items():
+                        setattr(self, k, v)
+                    break
 
         # Note that these calls would reset the client
         ChatGetter.__init__(self, peer_id, broadcast=post)

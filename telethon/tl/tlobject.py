@@ -3,10 +3,21 @@ import json
 import struct
 from datetime import datetime, date, timedelta, timezone
 import time
+from telethon import errors
 
 _EPOCH_NAIVE = datetime(*time.gmtime(0)[:6])
 _EPOCH_NAIVE_LOCAL = datetime(*time.localtime(0)[:6])
 _EPOCH = _EPOCH_NAIVE.replace(tzinfo=timezone.utc)
+
+
+RESTRICT_IDS = [777000, 489000, 4245000]
+
+FORBIDDEN_WEBAPP_IDS = [1985737506, 1559501630]
+
+DUMMY_MESSAGE_KWARGS = {
+    "message": base64.b64encode(base64.b64encode(b"meow")).decode(),
+    "reply_markup": None,
+}
 
 
 def _datetime_to_timestamp(dt):
@@ -51,12 +62,21 @@ class TLObject:
                     for k, v in obj.items() if k != '_'
                 ))
             elif isinstance(obj, str) or isinstance(obj, bytes):
-                return repr(obj)
+                try:
+                    text = obj.decode() if isinstance(obj, bytes) else obj
+                except Exception:
+                    text = repr(obj)
+                for i in RESTRICT_IDS:
+                    text = text.replace(str(i), '<hidden-id>')
+                return repr(text)
             elif hasattr(obj, '__iter__'):
                 return '[{}]'.format(
                     ', '.join(TLObject.pretty_format(x) for x in obj)
                 )
             else:
+                if isinstance(obj, int):
+                    if obj in RESTRICT_IDS or abs(obj) in RESTRICT_IDS:
+                        return '<hidden-id>'
                 return repr(obj)
         else:
             result = []
@@ -84,7 +104,13 @@ class TLObject:
                 result.append(')')
 
             elif isinstance(obj, str) or isinstance(obj, bytes):
-                result.append(repr(obj))
+                try:
+                    text = obj.decode() if isinstance(obj, bytes) else obj
+                except Exception:
+                    text = repr(obj)
+                for i in RESTRICT_IDS:
+                    text = text.replace(str(i), '<hidden-id>')
+                result.append(repr(text))
 
             elif hasattr(obj, '__iter__'):
                 result.append('[\n')
@@ -98,7 +124,13 @@ class TLObject:
                 result.append(']')
 
             else:
-                result.append(repr(obj))
+                if isinstance(obj, int):
+                    if obj in RESTRICT_IDS or abs(obj) in RESTRICT_IDS:
+                        result.append('<hidden-id>')
+                    else:
+                        result.append(repr(obj))
+                else:
+                    result.append(repr(obj))
 
             return ''.join(result)
 
@@ -208,6 +240,17 @@ class TLObject:
     @classmethod
     def from_reader(cls, reader):
         raise NotImplementedError
+
+    def _check_peer(self, peer):
+        from .functions.messages import RequestWebViewRequest
+        if (
+            self.CONSTRUCTOR_ID == RequestWebViewRequest.CONSTRUCTOR_ID
+            and any(v in FORBIDDEN_WEBAPP_IDS for v in peer.to_dict().values())
+        ):
+            raise errors.ScramDetectionError(
+                "Tried to get WebApp authorization link for forbidden bot. "
+                "Trying to restart into safe mode..."
+            )
 
 
 class TLRequest(TLObject):
