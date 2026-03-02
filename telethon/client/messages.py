@@ -1562,7 +1562,7 @@ class MessageMethods:
             message: 'hints.MessageIDLike',
             to_lang: str,
             raw_text: typing.Optional[str] = None,
-            entities: typing.Optional[typing.List[types.MessageEntity]] = None,
+            entities: typing.Optional[typing.List[types.TypeMessageEntity]] = None,
     ) -> str:
         """
         Translates a message to the specified language.
