@@ -55,8 +55,7 @@ class Connection(abc.ABC):
     def _wrap_socket_ssl(sock):
         if ssl_mod is None:
             raise RuntimeError(
-                "Cannot use proxy that requires SSL "
-                "without the SSL module being available"
+                "Cannot use proxy that requires SSL " "without the SSL module being available"
             )
 
         return ssl_mod.wrap_socket(
@@ -78,21 +77,11 @@ class Connection(abc.ABC):
             # We do the check for numerical values here
             # to be backwards compatible with PySocks proxy format,
             # (since socks.SOCKS5 == 2, socks.SOCKS4 == 1, socks.HTTP == 3)
-            if (
-                proxy_type == ProxyType.SOCKS5
-                or proxy_type == 2
-                or proxy_type == "socks5"
-            ):
+            if proxy_type == ProxyType.SOCKS5 or proxy_type == 2 or proxy_type == "socks5":
                 protocol = ProxyType.SOCKS5
-            elif (
-                proxy_type == ProxyType.SOCKS4
-                or proxy_type == 1
-                or proxy_type == "socks4"
-            ):
+            elif proxy_type == ProxyType.SOCKS4 or proxy_type == 1 or proxy_type == "socks4":
                 protocol = ProxyType.SOCKS4
-            elif (
-                proxy_type == ProxyType.HTTP or proxy_type == 3 or proxy_type == "http"
-            ):
+            elif proxy_type == ProxyType.HTTP or proxy_type == 3 or proxy_type == "http":
                 protocol = ProxyType.HTTP
             else:
                 raise ValueError("Unknown proxy protocol type: {}".format(proxy_type))
@@ -160,12 +149,7 @@ class Connection(abc.ABC):
                 # connects to the proxy server, not destination server.
                 # IPv family is also checked on proxy address.
                 if ":" in proxy.proxy_host:
-                    mode, address = socket.AF_INET6, (
-                        proxy.proxy_host,
-                        proxy.proxy_port,
-                        0,
-                        0,
-                    )
+                    mode, address = socket.AF_INET6, (proxy.proxy_host, proxy.proxy_port, 0, 0)
                 else:
                     mode, address = socket.AF_INET, (proxy.proxy_host, proxy.proxy_port)
 
@@ -184,10 +168,7 @@ class Connection(abc.ABC):
                 # this call sets the destination host/port and
                 # starts protocol negotiations with the proxy server.
                 sock = await proxy.connect(
-                    dest_host=self._ip,
-                    dest_port=self._port,
-                    timeout=timeout,
-                    _socket=sock,
+                    dest_host=self._ip, dest_port=self._port, timeout=timeout, _socket=sock
                 )
 
         else:
@@ -211,8 +192,7 @@ class Connection(abc.ABC):
 
             # Actual TCP connection and negotiation performed here.
             await asyncio.wait_for(
-                helpers.get_running_loop().sock_connect(sock=sock, address=address),
-                timeout=timeout,
+                helpers.get_running_loop().sock_connect(sock=sock, address=address), timeout=timeout
             )
 
             sock.setblocking(False)
@@ -229,9 +209,7 @@ class Connection(abc.ABC):
             elif isinstance(self._local_addr, str):
                 local_addr = (self._local_addr, 0)
             else:
-                raise ValueError(
-                    "Unknown local address format: {}".format(self._local_addr)
-                )
+                raise ValueError("Unknown local address format: {}".format(self._local_addr))
         else:
             local_addr = None
 
@@ -277,9 +255,7 @@ class Connection(abc.ABC):
 
         self._connected = False
 
-        await helpers._cancel(
-            self._log, send_task=self._send_task, recv_task=self._recv_task
-        )
+        await helpers._cancel(self._log, send_task=self._send_task, recv_task=self._recv_task)
 
         if self._writer:
             self._writer.close()
@@ -290,9 +266,7 @@ class Connection(abc.ABC):
                     # See issue #3917. For some users, this line was hanging indefinitely.
                     # The hard timeout is not ideal (connection won't be properly closed),
                     # but the code will at least be able to procceed.
-                    self._log.warning(
-                        "Graceful disconnection timed out, forcibly ignoring cleanup"
-                    )
+                    self._log.warning("Graceful disconnection timed out, forcibly ignoring cleanup")
                 except Exception as e:
                     # Disconnecting should never raise. Seen:
                     # * OSError: No route to host and

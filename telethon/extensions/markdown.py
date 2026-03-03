@@ -58,10 +58,7 @@ def parse(message, delimiters=None, url_re=None):
     # Note that the largest delimiter should go first, we don't
     # want ``` to be interpreted as a single back-tick in a code block.
     delim_re = re.compile(
-        "|".join(
-            "({})".format(re.escape(k))
-            for k in sorted(delimiters, key=len, reverse=True)
-        )
+        "|".join("({})".format(re.escape(k)) for k in sorted(delimiters, key=len, reverse=True))
     )
 
     # Cannot use a for loop because we need to skip some indices
@@ -86,11 +83,7 @@ def parse(message, delimiters=None, url_re=None):
 
                 # Remove the delimiter from the string
                 message = "".join(
-                    (
-                        message[:i],
-                        message[i + len(delim) : end],
-                        message[end + len(delim) :],
-                    )
+                    (message[:i], message[i + len(delim) : end], message[end + len(delim) :])
                 )
 
                 # Check other affected entities
@@ -98,9 +91,7 @@ def parse(message, delimiters=None, url_re=None):
                     # If the end is after our start, it is affected
                     if ent.offset + ent.length > i:
                         # If the old start is before ours and the old end is after ours, we are fully enclosed
-                        if ent.offset <= i and ent.offset + ent.length >= end + len(
-                            delim
-                        ):
+                        if ent.offset <= i and ent.offset + ent.length >= end + len(delim):
                             ent.length -= len(delim) * 2
                         else:
                             ent.length -= len(delim)
@@ -122,9 +113,7 @@ def parse(message, delimiters=None, url_re=None):
             m = url_re.match(message, pos=i)
             if m:
                 # Replace the whole match with only the inline URL text.
-                message = "".join(
-                    (message[: m.start()], m.group(1), message[m.end() :])
-                )
+                message = "".join((message[: m.start()], m.group(1), message[m.end() :]))
 
                 delim_size = m.end() - m.start() - len(m.group(1))
                 for ent in result:
@@ -134,9 +123,7 @@ def parse(message, delimiters=None, url_re=None):
 
                 result.append(
                     MessageEntityTextUrl(
-                        offset=m.start(),
-                        length=len(m.group(1)),
-                        url=del_surrogate(m.group(2)),
+                        offset=m.start(), length=len(m.group(1)), url=del_surrogate(m.group(2))
                     )
                 )
                 i += len(m.group(1))
@@ -166,9 +153,7 @@ def unparse(text, entities, delimiters=None, url_fmt=None):
         delimiters = DEFAULT_DELIMITERS
 
     if url_fmt is not None:
-        warnings.warn(
-            "url_fmt is deprecated"
-        )  # since it complicates everything *a lot*
+        warnings.warn("url_fmt is deprecated")  # since it complicates everything *a lot*
 
     if isinstance(entities, TLObject):
         entities = (entities,)

@@ -60,9 +60,7 @@ class InvalidBufferError(BufferError):
             super().__init__("Invalid response buffer (HTTP code {})".format(self.code))
         else:
             self.code = None
-            super().__init__(
-                "Invalid response buffer (too short {})".format(self.payload)
-            )
+            super().__init__("Invalid response buffer (too short {})".format(self.payload))
 
 
 class AuthKeyNotFound(Exception):
@@ -110,8 +108,7 @@ class AlreadyInConversationError(Exception):
 
     def __init__(self):
         super().__init__(
-            "Cannot open exclusive conversation in a "
-            "chat that already has one open conversation"
+            "Cannot open exclusive conversation in a " "chat that already has one open conversation"
         )
 
 

@@ -6,13 +6,9 @@ from ..tl import custom, types, functions
 
 
 class GiftMethods:
-    async def _get_input_stargift(
-        self, owned_gift_id: str
-    ) -> "types.TypeInputSavedStarGift":
+    async def _get_input_stargift(self, owned_gift_id: str) -> "types.TypeInputSavedStarGift":
         if not isinstance(owned_gift_id, str):
-            raise ValueError(
-                f"owned_gift_id has to be str, but {type(owned_gift_id)} was provided"
-            )
+            raise ValueError(f"owned_gift_id has to be str, but {type(owned_gift_id)} was provided")
 
         saved_gift_match = re.compile(r"^(-\d+)_(\d+)$").match(owned_gift_id)
         slug_match = re.compile(
@@ -113,9 +109,7 @@ class GiftMethods:
                     raise ValueError("Have not enough Telegram Stars.")
 
             r = await self(
-                functions.payments.SendStarsFormRequest(
-                    form_id=form.form_id, invoice=invoice
-                )
+                functions.payments.SendStarsFormRequest(form_id=form.form_id, invoice=invoice)
             )
 
         return r

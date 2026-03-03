@@ -46,13 +46,7 @@ _MAILTO_LEN = len("mailto:")
 
 
 class HTMLToTelegramParser(HTMLParser):
-    __slots__ = (
-        "text",
-        "entities",
-        "_building_entities",
-        "_open_tags",
-        "_open_tags_meta",
-    )
+    __slots__ = ("text", "entities", "_building_entities", "_open_tags", "_open_tags_meta")
 
     def __init__(self):
         super().__init__()
@@ -124,9 +118,7 @@ class HTMLToTelegramParser(HTMLParser):
             EntityType = None
 
         if EntityType and tag not in self._building_entities:
-            self._building_entities[tag] = EntityType(
-                offset=len(self.text), length=0, **args
-            )
+            self._building_entities[tag] = EntityType(offset=len(self.text), length=0, **args)
 
     def handle_data(self, text):
         for tag, entity in self._building_entities.items():
@@ -199,15 +191,9 @@ ENTITY_TO_FORMATTER = {
         "{}\n" "    </code>\n" "</pre>",
     ),
     MessageEntityEmail: lambda _, t: ('<a href="mailto:{}">'.format(escape(t)), "</a>"),
-    MessageEntityUrl: lambda _, t: (
-        '<a href="{}">'.format(escape(del_surrogate(t))),
-        "</a>",
-    ),
+    MessageEntityUrl: lambda _, t: ('<a href="{}">'.format(escape(del_surrogate(t))), "</a>"),
     MessageEntityTextUrl: lambda e, _: ('<a href="{}">'.format(escape(e.url)), "</a>"),
-    MessageEntityMentionName: lambda e, _: (
-        '<a href="tg://user?id={}">'.format(e.user_id),
-        "</a>",
-    ),
+    MessageEntityMentionName: lambda e, _: ('<a href="tg://user?id={}">'.format(e.user_id), "</a>"),
     MessageEntityCustomEmoji: lambda e, _: (
         '<tg-emoji emoji-id="{}">'.format(e.document_id),
         "</tg-emoji>",
@@ -264,12 +250,7 @@ def unparse(text: str, entities: Iterable[TypeMessageEntity]) -> str:
                 + text[next_escape_bound:]
             )
         else:
-            text = (
-                text[:at]
-                + what
-                + escape(text[at:next_escape_bound])
-                + text[next_escape_bound:]
-            )
+            text = text[:at] + what + escape(text[at:next_escape_bound]) + text[next_escape_bound:]
         next_escape_bound = at
 
     text = escape(text[:next_escape_bound]) + text[next_escape_bound:]

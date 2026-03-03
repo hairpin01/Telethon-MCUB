@@ -80,8 +80,9 @@ syncify(
     Conversation,
 )
 
+
 # Private special case, since a conversation's methods return
-# futures(but the public function themselves are synchronous).
+# futures (but the public function themselves are synchronous).
 _syncify_wrap(Conversation, "_get_result")
 
 __all__ = [

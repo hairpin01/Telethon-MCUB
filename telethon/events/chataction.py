@@ -38,9 +38,7 @@ class ChatAction(EventBuilder):
         # so that we can act on that message').
         if isinstance(update, types.UpdatePinnedChannelMessages) and not update.pinned:
             return cls.Event(
-                types.PeerChannel(update.channel_id),
-                pin_ids=update.messages,
-                pin=update.pinned,
+                types.PeerChannel(update.channel_id), pin_ids=update.messages, pin=update.pinned
             )
 
         elif isinstance(update, types.UpdatePinnedMessages) and not update.pinned:
@@ -54,9 +52,7 @@ class ChatAction(EventBuilder):
             )
 
         elif isinstance(update, types.UpdateChatParticipantDelete):
-            return cls.Event(
-                types.PeerChat(update.chat_id), kicked_by=True, users=update.user_id
-            )
+            return cls.Event(types.PeerChat(update.chat_id), kicked_by=True, users=update.user_id)
 
         # UpdateChannel is sent if we leave a channel, and the update._entities
         # set by _process_update would let us make some guesses. However it's
@@ -80,13 +76,9 @@ class ChatAction(EventBuilder):
                     users=action.user_id,
                 )
             elif isinstance(action, types.MessageActionChatCreate):
-                return cls.Event(
-                    msg, users=action.users, created=True, new_title=action.title
-                )
+                return cls.Event(msg, users=action.users, created=True, new_title=action.title)
             elif isinstance(action, types.MessageActionChannelCreate):
-                return cls.Event(
-                    msg, created=True, users=msg.from_id, new_title=action.title
-                )
+                return cls.Event(msg, created=True, users=msg.from_id, new_title=action.title)
             elif isinstance(action, types.MessageActionChatEditTitle):
                 return cls.Event(msg, users=msg.from_id, new_title=action.title)
             elif isinstance(action, types.MessageActionChatEditPhoto):
@@ -186,9 +178,9 @@ class ChatAction(EventBuilder):
 
             self._added_by = None
             self._kicked_by = None
-            self.user_added = self.user_joined = self.user_left = self.user_kicked = (
-                self.unpin
-            ) = False
+            self.user_added = self.user_joined = self.user_left = self.user_kicked = self.unpin = (
+                False
+            )
 
             if added_by is True:
                 self.user_joined = True
@@ -230,9 +222,7 @@ class ChatAction(EventBuilder):
             `telethon.client.messages.MessageMethods.send_message` with
             ``entity`` already set.
             """
-            return await self._client.send_message(
-                await self.get_input_chat(), *args, **kwargs
-            )
+            return await self._client.send_message(await self.get_input_chat(), *args, **kwargs)
 
         async def reply(self, *args, **kwargs):
             """
@@ -246,9 +236,7 @@ class ChatAction(EventBuilder):
                 return await self.respond(*args, **kwargs)
 
             kwargs["reply_to"] = self.action_message.id
-            return await self._client.send_message(
-                await self.get_input_chat(), *args, **kwargs
-            )
+            return await self._client.send_message(await self.get_input_chat(), *args, **kwargs)
 
         async def delete(self, *args, **kwargs):
             """
@@ -427,9 +415,7 @@ class ChatAction(EventBuilder):
                 for user_id in self._user_ids:
                     # First try to get it from our entities
                     try:
-                        self._input_users.append(
-                            utils.get_input_peer(self._entities[user_id])
-                        )
+                        self._input_users.append(utils.get_input_peer(self._entities[user_id]))
                         continue
                     except (KeyError, TypeError):
                         pass
@@ -456,8 +442,7 @@ class ChatAction(EventBuilder):
 
             # Note: we access the property first so that it fills if needed
             if (
-                self.input_users is None
-                or len(self._input_users) != len(self._user_ids)
+                self.input_users is None or len(self._input_users) != len(self._user_ids)
             ) and self.action_message:
                 self._input_users = [
                     utils.get_input_peer(u)

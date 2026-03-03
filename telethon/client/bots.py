@@ -64,11 +64,7 @@ class BotMethods:
 
         result = await self(
             functions.messages.GetInlineBotResultsRequest(
-                bot=bot,
-                peer=peer,
-                query=query,
-                offset=offset or "",
-                geo_point=geo_point,
+                bot=bot, peer=peer, query=query, offset=offset or "", geo_point=geo_point
             )
         )
 

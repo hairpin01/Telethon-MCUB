@@ -35,19 +35,13 @@ class MTProxyIO:
             raise ValueError("Only RandomizedIntermediate can be used with dd-secrets")
         secret = secret[1:] if is_dd else secret
         if len(secret) != 16:
-            raise ValueError(
-                "MTProxy secret must be a hex-string representing 16 bytes"
-            )
+            raise ValueError("MTProxy secret must be a hex-string representing 16 bytes")
 
         # Obfuscated messages secrets cannot start with any of these
         keywords = (b"PVrG", b"GET ", b"POST", b"\xee\xee\xee\xee")
         while True:
             random = os.urandom(64)
-            if (
-                random[0] != 0xEF
-                and random[:4] not in keywords
-                and random[4:4] != b"\0\0\0\0"
-            ):
+            if random[0] != 0xEF and random[:4] not in keywords and random[4:4] != b"\0\0\0\0":
                 break
 
         random = bytearray(random)
@@ -118,9 +112,7 @@ class TcpMTProxy(ObfuscatedConnection):
 
         if self._reader.at_eof():
             await self.disconnect()
-            raise ConnectionError(
-                "Proxy closed the connection after sending initial payload"
-            )
+            raise ConnectionError("Proxy closed the connection after sending initial payload")
 
     @staticmethod
     def address_info(proxy_info):

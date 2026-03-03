@@ -48,9 +48,7 @@ class SQLiteSession(MemorySession):
 
         self._conn = None
         c = self._cursor()
-        c.execute(
-            "select name from sqlite_master " "where type='table' and name='version'"
-        )
+        c.execute("select name from sqlite_master " "where type='table' and name='version'")
         if c.fetchone():
             # Tables already exist, check for the version
             c.execute("select version from version")
@@ -65,14 +63,9 @@ class SQLiteSession(MemorySession):
             c.execute("select * from sessions")
             tuple_ = c.fetchone()
             if tuple_:
-                (
-                    self._dc_id,
-                    self._server_address,
-                    self._port,
-                    key,
-                    tmp_key,
-                    self._takeout_id,
-                ) = tuple_
+                self._dc_id, self._server_address, self._port, key, tmp_key, self._takeout_id = (
+                    tuple_
+                )
                 self._auth_key = AuthKey(data=key)
                 self._tmp_auth_key = AuthKey(data=tmp_key)
 
@@ -258,18 +251,14 @@ class SQLiteSession(MemorySession):
     def get_update_states(self):
         c = self._cursor()
         try:
-            rows = c.execute(
-                "select id, pts, qts, date, seq from update_state"
-            ).fetchall()
+            rows = c.execute("select id, pts, qts, date, seq from update_state").fetchall()
             return (
                 (
                     row[0],
                     types.updates.State(
                         pts=row[1],
                         qts=row[2],
-                        date=datetime.datetime.fromtimestamp(
-                            row[3], tz=datetime.timezone.utc
-                        ),
+                        date=datetime.datetime.fromtimestamp(row[3], tz=datetime.timezone.utc),
                         seq=row[4],
                         unread_count=0,
                     ),

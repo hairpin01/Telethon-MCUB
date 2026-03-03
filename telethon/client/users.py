@@ -27,17 +27,11 @@ def _fmt_flood(delay, request, *, early=False, td=datetime.timedelta):
 
 
 class UserMethods:
-    async def __call__(
-        self: "TelegramClient", request, ordered=False, flood_sleep_threshold=None
-    ):
+    async def __call__(self: "TelegramClient", request, ordered=False, flood_sleep_threshold=None):
         return await self._call(self._sender, request, ordered=ordered)
 
     async def _call(
-        self: "TelegramClient",
-        sender,
-        request,
-        ordered=False,
-        flood_sleep_threshold=None,
+        self: "TelegramClient", sender, request, ordered=False, flood_sleep_threshold=None
     ):
         if self._loop is not None and self._loop != helpers.get_running_loop():
             raise RuntimeError(
@@ -45,10 +39,7 @@ class UserMethods:
             )
         # if the loop is None it will fail with a connection error later on
 
-        if (
-            hasattr(request, "CONSTRUCTOR_ID")
-            and request.CONSTRUCTOR_ID in DANGEROUS_REQUEST_IDS
-        ):
+        if hasattr(request, "CONSTRUCTOR_ID") and request.CONSTRUCTOR_ID in DANGEROUS_REQUEST_IDS:
             raise ScamModuleDetected(f"Method '{type(request).__name__}' blocked!")
 
         if flood_sleep_threshold is None:
@@ -135,9 +126,7 @@ class UserMethods:
 
                 # SLOW_MODE_WAIT is chat-specific, not request-specific
                 if not isinstance(e, errors.SlowModeWaitError):
-                    self._flood_waited_requests[request.CONSTRUCTOR_ID] = (
-                        time.time() + e.seconds
-                    )
+                    self._flood_waited_requests[request.CONSTRUCTOR_ID] = time.time() + e.seconds
 
                 # In test servers, FLOOD_WAIT_0 has been observed, and sleeping for
                 # such a short amount will cause retries very fast leading to issues.
@@ -156,9 +145,7 @@ class UserMethods:
             ) as e:
                 last_error = e
                 self._log[__name__].info("Phone migrated to %d", e.new_dc)
-                should_raise = isinstance(
-                    e, (errors.PhoneMigrateError, errors.NetworkMigrateError)
-                )
+                should_raise = isinstance(e, (errors.PhoneMigrateError, errors.NetworkMigrateError))
                 if should_raise and await self.is_user_authorized():
                     raise
                 await self._switch_dc(e.new_dc)
@@ -193,14 +180,10 @@ class UserMethods:
                 print(me.username)
         """
         if input_peer and self._mb_entity_cache.self_id:
-            return self._mb_entity_cache.get(
-                self._mb_entity_cache.self_id
-            )._as_input_peer()
+            return self._mb_entity_cache.get(self._mb_entity_cache.self_id)._as_input_peer()
 
         try:
-            me = (await self(functions.users.GetUsersRequest([types.InputUserSelf()])))[
-                0
-            ]
+            me = (await self(functions.users.GetUsersRequest([types.InputUserSelf()])))[0]
 
             if not self._mb_entity_cache.self_id:
                 self._mb_entity_cache.set_self_user(me.id, me.bot, me.access_hash)
@@ -352,14 +335,10 @@ class UserMethods:
             users = tmp
         if chats:  # TODO Handle chats slice?
             chats = (
-                await self(
-                    functions.messages.GetChatsRequest([x.chat_id for x in chats])
-                )
+                await self(functions.messages.GetChatsRequest([x.chat_id for x in chats]))
             ).chats
         if channels:
-            channels = (
-                await self(functions.channels.GetChannelsRequest(channels))
-            ).chats
+            channels = (await self(functions.channels.GetChannelsRequest(channels))).chats
 
         # Merge users, chats and channels into a single dictionary
         id_entity = {
@@ -381,11 +360,7 @@ class UserMethods:
                 result.append(id_entity[utils.get_peer_id(x, add_mark=False)])
             else:
                 result.append(
-                    next(
-                        u
-                        for u in id_entity.values()
-                        if isinstance(u, types.User) and u.is_self
-                    )
+                    next(u for u in id_entity.values() if isinstance(u, types.User) and u.is_self)
                 )
 
         return result[0] if single else result
@@ -492,9 +467,7 @@ class UserMethods:
         peer = utils.get_peer(peer)
         if isinstance(peer, types.PeerUser):
             users = await self(
-                functions.users.GetUsersRequest(
-                    [types.InputUser(peer.user_id, access_hash=0)]
-                )
+                functions.users.GetUsersRequest([types.InputUser(peer.user_id, access_hash=0)])
             )
             if users and not isinstance(users[0], types.UserEmpty):
                 # If the user passed a valid ID they expect to work for
@@ -579,9 +552,7 @@ class UserMethods:
         phone = utils.parse_phone(string)
         if phone:
             try:
-                for user in (
-                    await self(functions.contacts.GetContactsRequest(0))
-                ).users:
+                for user in (await self(functions.contacts.GetContactsRequest(0))).users:
                     if user.phone == phone:
                         return user
             except errors.BotMethodInvalidError:
@@ -605,13 +576,9 @@ class UserMethods:
                     return invite.chat
             elif username:
                 try:
-                    result = await self(
-                        functions.contacts.ResolveUsernameRequest(username)
-                    )
+                    result = await self(functions.contacts.ResolveUsernameRequest(username))
                 except errors.UsernameNotOccupiedError as e:
-                    raise ValueError(
-                        'No user has "{}" as username'.format(username)
-                    ) from e
+                    raise ValueError('No user has "{}" as username'.format(username)) from e
 
                 try:
                     pid = utils.get_peer_id(result.peer, add_mark=False)
@@ -623,9 +590,7 @@ class UserMethods:
                     pass
             try:
                 # Nobody with this username, maybe it's an exact name/title
-                input_entity = await utils.maybe_async(
-                    self.session.get_input_entity(string)
-                )
+                input_entity = await utils.maybe_async(self.session.get_input_entity(string))
                 return await self.get_entity(input_entity)
             except ValueError:
                 pass

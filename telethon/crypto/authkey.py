@@ -33,11 +33,7 @@ class AuthKey:
             return
 
         if isinstance(value, type(self)):
-            self._key, self.aux_hash, self.key_id = (
-                value._key,
-                value.aux_hash,
-                value.key_id,
-            )
+            self._key, self.aux_hash, self.key_id = value._key, value.aux_hash, value.key_id
             return
 
         self._key = value

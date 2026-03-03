@@ -48,9 +48,7 @@ class MessageRead(EventBuilder):
             return cls.Event(message_ids=update.messages, contents=True)
         elif isinstance(update, types.UpdateChannelReadMessagesContents):
             return cls.Event(
-                types.PeerChannel(update.channel_id),
-                message_ids=update.messages,
-                contents=True,
+                types.PeerChannel(update.channel_id), message_ids=update.messages, contents=True
             )
 
     def filter(self, event):
@@ -77,9 +75,7 @@ class MessageRead(EventBuilder):
                 It may only be set on ``inbox`` events.
         """
 
-        def __init__(
-            self, peer=None, max_id=None, out=False, contents=False, message_ids=None
-        ):
+        def __init__(self, peer=None, max_id=None, out=False, contents=False, message_ids=None):
             self.outbox = out
             self.contents = contents
             self._message_ids = message_ids or []
@@ -117,9 +113,7 @@ class MessageRead(EventBuilder):
                 if not chat:
                     self._messages = []
                 else:
-                    self._messages = await self._client.get_messages(
-                        chat, ids=self._message_ids
-                    )
+                    self._messages = await self._client.get_messages(chat, ids=self._message_ids)
 
             return self._messages
 
@@ -131,13 +125,9 @@ class MessageRead(EventBuilder):
             list of booleans indicating which messages have been read.
             """
             if utils.is_list_like(message):
-                return [
-                    (m if isinstance(m, int) else m.id) <= self.max_id for m in message
-                ]
+                return [(m if isinstance(m, int) else m.id) <= self.max_id for m in message]
             else:
-                return (
-                    message if isinstance(message, int) else message.id
-                ) <= self.max_id
+                return (message if isinstance(message, int) else message.id) <= self.max_id
 
         def __contains__(self, message):
             """`True` if the message(s) are read message."""

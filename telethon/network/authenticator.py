@@ -22,11 +22,7 @@ from .. import helpers
 from ..crypto import AES, AuthKey, Factorization, rsa
 from ..errors import SecurityError
 from ..extensions import BinaryReader
-from ..tl.functions import (
-    ReqPqMultiRequest,
-    ReqDHParamsRequest,
-    SetClientDHParamsRequest,
-)
+from ..tl.functions import ReqPqMultiRequest, ReqDHParamsRequest, SetClientDHParamsRequest
 
 
 async def do_authentication(sender):

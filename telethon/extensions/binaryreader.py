@@ -105,9 +105,7 @@ class BinaryReader:
         """
         first_byte = self.read_byte()
         if first_byte == 254:
-            length = (
-                self.read_byte() | (self.read_byte() << 8) | (self.read_byte() << 16)
-            )
+            length = self.read_byte() | (self.read_byte() << 8) | (self.read_byte() << 16)
             padding = length % 4
         else:
             length = first_byte

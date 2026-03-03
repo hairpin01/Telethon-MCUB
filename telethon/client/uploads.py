@@ -37,16 +37,10 @@ class _CacheType:
         return self._cls == other
 
 
-def _resize_photo_if_needed(
-    file, is_image, width=2560, height=2560, background=(255, 255, 255)
-):
+def _resize_photo_if_needed(file, is_image, width=2560, height=2560, background=(255, 255, 255)):
 
     # https://github.com/telegramdesktop/tdesktop/blob/12905f0dcb9d513378e7db11989455a1b764ef75/Telegram/SourceFiles/boxes/photo_crop_box.cpp#L254
-    if (
-        not is_image
-        or PIL is None
-        or (isinstance(file, io.IOBase) and not file.seekable())
-    ):
+    if not is_image or PIL is None or (isinstance(file, io.IOBase) and not file.seekable()):
         return file
 
     if isinstance(file, bytes):
@@ -75,11 +69,7 @@ def _resize_photo_if_needed(
 
         if image.mode == "RGB":
             # Check if image is within acceptable bounds, if so, check if the image is at or below 10 MB, or assume it isn't if size is None or 0
-            if (
-                image.width <= width
-                and image.height <= height
-                and (before and before <= 10000000)
-            ):
+            if image.width <= width and image.height <= height and (before and before <= 10000000):
                 return file
 
             # If the image is already RGB, don't convert it
@@ -451,9 +441,7 @@ class UploadMethods:
                 for sublist in formatting_entities
                 for ent in sublist
             ):
-                raise TypeError(
-                    "All entities must be instances of <types.TypeMessageEntity>"
-                )
+                raise TypeError("All entities must be instances of <types.TypeMessageEntity>")
 
             result = []
             while file:
@@ -600,9 +588,7 @@ class UploadMethods:
                 progress_callback=used_callback,
                 nosound_video=True,
             )
-            if isinstance(
-                fm, (types.InputMediaUploadedPhoto, types.InputMediaPhotoExternal)
-            ):
+            if isinstance(fm, (types.InputMediaUploadedPhoto, types.InputMediaPhotoExternal)):
                 r = await self(functions.messages.UploadMediaRequest(entity, media=fm))
 
                 fm = utils.get_input_media(r.photo)
@@ -611,9 +597,7 @@ class UploadMethods:
             ):
                 r = await self(functions.messages.UploadMediaRequest(entity, media=fm))
 
-                fm = utils.get_input_media(
-                    r.document, supports_streaming=supports_streaming
-                )
+                fm = utils.get_input_media(r.document, supports_streaming=supports_streaming)
 
             if captions:
                 caption, msg_entities = captions.pop()
@@ -774,10 +758,7 @@ class UploadMethods:
 
             part_count = (file_size + part_size - 1) // part_size
             self._log[__name__].info(
-                "Uploading file of %d bytes in %d chunks of %d",
-                file_size,
-                part_count,
-                part_size,
+                "Uploading file of %d bytes in %d chunks of %d", file_size, part_count, part_size
             )
 
             pos = 0
@@ -818,21 +799,15 @@ class UploadMethods:
                         file_id, part_index, part_count, part
                     )
                 else:
-                    request = functions.upload.SaveFilePartRequest(
-                        file_id, part_index, part
-                    )
+                    request = functions.upload.SaveFilePartRequest(file_id, part_index, part)
 
                 result = await self(request)
                 if result:
-                    self._log[__name__].debug(
-                        "Uploaded %d/%d", part_index + 1, part_count
-                    )
+                    self._log[__name__].debug("Uploaded %d/%d", part_index + 1, part_count)
                     if progress_callback:
                         await helpers._maybe_await(progress_callback(pos, file_size))
                 else:
-                    raise RuntimeError(
-                        "Failed to upload file part {}.".format(part_index)
-                    )
+                    raise RuntimeError("Failed to upload file part {}.".format(part_index))
 
         if is_big:
             return types.InputFileBig(file_id, part_count, file_name)
@@ -872,9 +847,9 @@ class UploadMethods:
 
         # `aiofiles` do not base `io.IOBase` but do have `read`, so we
         # just check for the read attribute to see if it's file-like.
-        if not isinstance(
-            file, (str, bytes, types.InputFile, types.InputFileBig)
-        ) and not hasattr(file, "read"):
+        if not isinstance(file, (str, bytes, types.InputFile, types.InputFileBig)) and not hasattr(
+            file, "read"
+        ):
             # The user may pass a Message containing media (or the media,
             # or anything similar) that should be treated as a file. Try
             # getting the input media for whatever they passed and send it.
@@ -951,9 +926,7 @@ class UploadMethods:
 
             # setting `nosound_video` to `True` doesn't affect videos with sound
             # instead it prevents sending silent videos as GIFs
-            nosound_video = (
-                nosound_video if mime_type.split("/")[0] == "video" else None
-            )
+            nosound_video = nosound_video if mime_type.split("/")[0] == "video" else None
 
             media = types.InputMediaUploadedDocument(
                 file=file_handle,

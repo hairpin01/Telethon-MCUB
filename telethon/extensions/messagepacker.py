@@ -104,13 +104,10 @@ class MessagePacker:
         if len(batch) > 1:
             # Inlined code to pack several messages into a container
             data = (
-                struct.pack("<Ii", MessageContainer.CONSTRUCTOR_ID, len(batch))
-                + buffer.getvalue()
+                struct.pack("<Ii", MessageContainer.CONSTRUCTOR_ID, len(batch)) + buffer.getvalue()
             )
             buffer = io.BytesIO()
-            container_id = self._state.write_data_as_message(
-                buffer, data, content_related=False
-            )
+            container_id = self._state.write_data_as_message(buffer, data, content_related=False)
             for s in batch:
                 s.container_id = container_id
 

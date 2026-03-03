@@ -77,8 +77,7 @@ class NewMessage(EventBuilder):
             incoming = not outgoing
         elif all(x is not None and not x for x in (incoming, outgoing)):
             raise ValueError(
-                "Don't create an event handler if you "
-                "don't want neither incoming nor outgoing!"
+                "Don't create an event handler if you " "don't want neither incoming nor outgoing!"
             )
 
         super().__init__(chats, blacklist_chats=blacklist_chats, func=func)
@@ -224,9 +223,7 @@ class NewMessage(EventBuilder):
         def __init__(self, message):
             self.__dict__["_init"] = False
             super().__init__(
-                chat_peer=message.peer_id,
-                msg_id=message.id,
-                broadcast=bool(message.post),
+                chat_peer=message.peer_id, msg_id=message.id, broadcast=bool(message.post)
             )
 
             self.pattern_match = None

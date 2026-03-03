@@ -46,9 +46,7 @@ class _DirectDownloadIter(RequestIter):
         msg_data,
         cdn_redirect=None,
     ):
-        self.request = functions.upload.GetFileRequest(
-            file, offset=offset, limit=request_size
-        )
+        self.request = functions.upload.GetFileRequest(file, offset=offset, limit=request_size)
         self._client = self.client
         self._cdn_redirect = cdn_redirect
         if cdn_redirect is not None:
@@ -77,9 +75,7 @@ class _DirectDownloadIter(RequestIter):
                 for option in config.dc_options:
                     if option.ip_address == self.client.session.server_address:
                         await utils.maybe_async(
-                            self.client.session.set_dc(
-                                option.id, option.ip_address, option.port
-                            )
+                            self.client.session.set_dc(option.id, option.ip_address, option.port)
                         )
                         await utils.maybe_async(self.client.session.save())
                         break
@@ -112,8 +108,7 @@ class _DirectDownloadIter(RequestIter):
                 await self.client._call(
                     self.client._sender,
                     functions.upload.ReuploadCdnFileRequest(
-                        file_token=self._cdn_redirect.file_token,
-                        request_token=result.request_token,
+                        file_token=self._cdn_redirect.file_token, request_token=result.request_token
                     ),
                 )
                 result = await self._client._call(self._sender, self.request)
@@ -129,9 +124,7 @@ class _DirectDownloadIter(RequestIter):
                 raise
 
             self._timed_out = True
-            self.client._log[__name__].info(
-                "Got timeout while downloading file, retrying once"
-            )
+            self.client._log[__name__].info("Got timeout while downloading file, retrying once")
             await asyncio.sleep(TIMED_OUT_SLEEP)
             return await self._request()
 
@@ -151,23 +144,16 @@ class _DirectDownloadIter(RequestIter):
                     pass
             return await self._request()
 
-        except (
-            errors.FilerefUpgradeNeededError,
-            errors.FileReferenceExpiredError,
-        ) as e:
+        except (errors.FilerefUpgradeNeededError, errors.FileReferenceExpiredError) as e:
             # Only implemented for documents which are the ones that may take that long to download
             if (
                 not self._msg_data
-                or not isinstance(
-                    self.request.location, types.InputDocumentFileLocation
-                )
+                or not isinstance(self.request.location, types.InputDocumentFileLocation)
                 or self.request.location.thumb_size != ""
             ):
                 raise
 
-            self.client._log[__name__].info(
-                "File ref expired during download; refetching message"
-            )
+            self.client._log[__name__].info("File ref expired during download; refetching message")
             chat, msg_id = self._msg_data
             msg = await self.client.get_messages(chat, ids=msg_id)
 
@@ -326,11 +312,7 @@ class DownloadMethods:
                     return None
 
                 return await self._download_photo(
-                    entity.chat_photo,
-                    file,
-                    date=None,
-                    thumb=thumb,
-                    progress_callback=None,
+                    entity.chat_photo, file, date=None, thumb=thumb, progress_callback=None
                 )
 
             for attr in ("username", "first_name", "title"):
@@ -369,11 +351,7 @@ class DownloadMethods:
             if ty == helpers._EntityType.CHANNEL:
                 full = await self(functions.channels.GetFullChannelRequest(ie))
                 return await self._download_photo(
-                    full.full_chat.chat_photo,
-                    file,
-                    date=None,
-                    progress_callback=None,
-                    thumb=thumb,
+                    full.full_chat.chat_photo, file, date=None, progress_callback=None, thumb=thumb
                 )
             else:
                 # Until there's a report for chats, no need to.
@@ -484,19 +462,14 @@ class DownloadMethods:
                 media = media.webpage.document or media.webpage.photo
 
         if isinstance(media, (types.MessageMediaPhoto, types.Photo)):
-            return await self._download_photo(
-                media, file, date, thumb, progress_callback
-            )
+            return await self._download_photo(media, file, date, thumb, progress_callback)
         elif isinstance(media, (types.MessageMediaDocument, types.Document)):
             return await self._download_document(
                 media, file, date, thumb, progress_callback, msg_data
             )
         elif isinstance(media, types.MessageMediaContact) and thumb is None:
             return self._download_contact(media, file)
-        elif (
-            isinstance(media, (types.WebDocument, types.WebDocumentNoProxy))
-            and thumb is None
-        ):
+        elif isinstance(media, (types.WebDocument, types.WebDocumentNoProxy)) and thumb is None:
             return await self._download_web_document(media, file, progress_callback)
 
     async def download_file(
@@ -637,9 +610,7 @@ class DownloadMethods:
             if in_memory:
                 return f.getvalue()
         except _CdnRedirect as e:
-            self._log[__name__].info(
-                "FileCdnRedirect to CDN data center %s", e.cdn_redirect.dc_id
-            )
+            self._log[__name__].info("FileCdnRedirect to CDN data center %s", e.cdn_redirect.dc_id)
             return await self._download_file(
                 input_location=input_location,
                 file=file,
@@ -882,12 +853,7 @@ class DownloadMethods:
             return next((t for t in thumbs if t.type == thumb), None)
         elif isinstance(
             thumb,
-            (
-                types.PhotoSize,
-                types.PhotoCachedSize,
-                types.PhotoStrippedSize,
-                types.VideoSize,
-            ),
+            (types.PhotoSize, types.PhotoCachedSize, types.PhotoStrippedSize, types.VideoSize),
         ):
             return thumb
         else:
@@ -915,9 +881,7 @@ class DownloadMethods:
                 f.close()
         return file
 
-    async def _download_photo(
-        self: "TelegramClient", photo, file, date, thumb, progress_callback
-    ):
+    async def _download_photo(self: "TelegramClient", photo, file, date, thumb, progress_callback):
         """Specialized version of .download_media() for photos"""
         # Determine the photo and its largest size
         if isinstance(photo, types.MessageMediaPhoto):
@@ -978,9 +942,7 @@ class DownloadMethods:
 
         return kind, possible_names
 
-    async def _download_document(
-        self, document, file, date, thumb, progress_callback, msg_data
-    ):
+    async def _download_document(self, document, file, date, thumb, progress_callback, msg_data):
         """Specialized version of .download_media() for documents."""
         if isinstance(document, types.MessageMediaDocument):
             document = document.document
@@ -990,11 +952,7 @@ class DownloadMethods:
         if thumb is None:
             kind, possible_names = self._get_kind_and_names(document.attributes)
             file = self._get_proper_filename(
-                file,
-                kind,
-                utils.get_extension(document),
-                date=date,
-                possible_names=possible_names,
+                file, kind, utils.get_extension(document), date=date, possible_names=possible_names
             )
             size = None
         else:
@@ -1048,10 +1006,7 @@ class DownloadMethods:
         )
 
         file = cls._get_proper_filename(
-            file,
-            "contact",
-            ".vcard",
-            possible_names=[first_name, phone_number, last_name],
+            file, "contact", ".vcard", possible_names=[first_name, phone_number, last_name]
         )
         if file is bytes:
             return result

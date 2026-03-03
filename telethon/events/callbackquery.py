@@ -56,9 +56,7 @@ class CallbackQuery(EventBuilder):
                 ])
     """
 
-    def __init__(
-        self, chats=None, *, blacklist_chats=False, func=None, data=None, pattern=None
-    ):
+    def __init__(self, chats=None, *, blacklist_chats=False, func=None, data=None, pattern=None):
         super().__init__(chats, blacklist_chats=blacklist_chats, func=func)
 
         if data and pattern:
@@ -77,9 +75,7 @@ class CallbackQuery(EventBuilder):
             self.match = match
         elif hasattr(match, "match") and callable(match.match):
             if not isinstance(getattr(match, "pattern", b""), bytes):
-                match = re.compile(
-                    match.pattern.encode("utf-8"), match.flags & (~re.UNICODE)
-                )
+                match = re.compile(match.pattern.encode("utf-8"), match.flags & (~re.UNICODE))
 
             self.match = match.match
         else:
@@ -202,9 +198,7 @@ class CallbackQuery(EventBuilder):
 
             try:
                 chat = await self.get_input_chat() if self.is_channel else None
-                self._message = await self._client.get_messages(
-                    chat, ids=self._message_id
-                )
+                self._message = await self._client.get_messages(chat, ids=self._message_id)
             except ValueError:
                 return
 
@@ -289,9 +283,7 @@ class CallbackQuery(EventBuilder):
             This method will likely fail if `via_inline` is `True`.
             """
             self._client.loop.create_task(self.answer())
-            return await self._client.send_message(
-                await self.get_input_chat(), *args, **kwargs
-            )
+            return await self._client.send_message(await self.get_input_chat(), *args, **kwargs)
 
         async def reply(self, *args, **kwargs):
             """
@@ -305,9 +297,7 @@ class CallbackQuery(EventBuilder):
             """
             self._client.loop.create_task(self.answer())
             kwargs["reply_to"] = self.query.msg_id
-            return await self._client.send_message(
-                await self.get_input_chat(), *args, **kwargs
-            )
+            return await self._client.send_message(await self.get_input_chat(), *args, **kwargs)
 
         async def edit(self, *args, **kwargs):
             """
@@ -327,12 +317,9 @@ class CallbackQuery(EventBuilder):
             """
             self._client.loop.create_task(self.answer())
             if isinstance(
-                self.query.msg_id,
-                (types.InputBotInlineMessageID, types.InputBotInlineMessageID64),
+                self.query.msg_id, (types.InputBotInlineMessageID, types.InputBotInlineMessageID64)
             ):
-                return await self._client.edit_message(
-                    self.query.msg_id, *args, **kwargs
-                )
+                return await self._client.edit_message(self.query.msg_id, *args, **kwargs)
             else:
                 return await self._client.edit_message(
                     await self.get_input_chat(), self.query.msg_id, *args, **kwargs
@@ -354,8 +341,7 @@ class CallbackQuery(EventBuilder):
             """
             self._client.loop.create_task(self.answer())
             if isinstance(
-                self.query.msg_id,
-                (types.InputBotInlineMessageID, types.InputBotInlineMessageID64),
+                self.query.msg_id, (types.InputBotInlineMessageID, types.InputBotInlineMessageID64)
             ):
                 raise TypeError(
                     "Inline messages cannot be deleted as there is no API request available to do so"
