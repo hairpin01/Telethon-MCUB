@@ -1,19 +1,16 @@
-import hashlib
-import os
+import hashlib import os
 
-from .crypto import factorization
-from .tl import types
+    from.crypto import factorization from.tl import types
 
-
-def check_prime_and_good_check(prime: int, g: int):
-    good_prime_bits_count = 2048
-    if prime < 0 or prime.bit_length() != good_prime_bits_count:
+    def check_prime_and_good_check(prime: int, g: int) :good_prime_bits_count = 2048 if prime < 0 or prime.bit_length() != good_prime_bits_count:
         raise ValueError(
-            "bad prime count {}, expected {}".format(prime.bit_length(), good_prime_bits_count)
+            "bad prime count {}, expected {}".format(
+                prime.bit_length(), good_prime_bits_count
+            )
         )
 
-    # WARNING: This factorization is slow and blocks the event loop
-    # Consider running in thread pool for better performance
+#WARNING : This factorization is slow and blocks the event loop
+#Consider running in thread pool for better performance
     if factorization.Factorization.factorize(prime)[0] != 1:
         raise ValueError('given "prime" is not prime')
 
@@ -41,7 +38,7 @@ def check_prime_and_good_check(prime: int, g: int):
     if factorization.Factorization.factorize(prime_sub1_div2)[0] != 1:
         raise ValueError("(prime - 1) // 2 is not prime")
 
-    # Else it's good
+#Else it's good
 
 
 def check_prime_and_good(prime_bytes: bytes, g: int):
@@ -314,33 +311,17 @@ def check_prime_and_good(prime_bytes: bytes, g: int):
 
 
 def is_good_large(number: int, p: int) -> bool:
-    return number > 0 and p - number > 0
+    return number > 0 and p - number> 0
 
+                                                   SIZE_FOR_HASH = 256
 
-SIZE_FOR_HASH = 256
+                                                   def num_bytes_for_hash(number:bytes)->bytes: return bytes(SIZE_FOR_HASH - len(number)) + number
 
+                                                                          def big_num_for_hash(g: int)->bytes: return g.to_bytes(SIZE_FOR_HASH, "big")
 
-def num_bytes_for_hash(number: bytes) -> bytes:
-    return bytes(SIZE_FOR_HASH - len(number)) + number
+                                                                                                                                     def sha256(* p:bytes)->bytes:hash = hashlib.sha256() for q in p:hash.update(q) return hash.digest()
 
-
-def big_num_for_hash(g: int) -> bytes:
-    return g.to_bytes(SIZE_FOR_HASH, "big")
-
-
-def sha256(*p: bytes) -> bytes:
-    hash = hashlib.sha256()
-    for q in p:
-        hash.update(q)
-    return hash.digest()
-
-
-def is_good_mod_exp_first(modexp, prime) -> bool:
-    diff = prime - modexp
-    min_diff_bits_count = 2048 - 64
-    max_mod_exp_size = 256
-    if (
-        diff < 0
+                                                                                                                                                                                                                     def is_good_mod_exp_first(modexp, prime)->bool :diff = prime - modexp min_diff_bits_count = 2048 - 64 max_mod_exp_size = 256 if (diff < 0
         or diff.bit_length() < min_diff_bits_count
         or modexp.bit_length() < min_diff_bits_count
         or (modexp.bit_length() + 7) // 8 > max_mod_exp_size
@@ -358,7 +339,8 @@ def pbkdf2sha512(password: bytes, salt: bytes, iterations: int):
 
 
 def compute_hash(
-    algo: types.PasswordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow, password: str
+    algo: types.PasswordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow,
+    password: str,
 ):
     hash1 = sha256(algo.salt1, password.encode("utf-8"), algo.salt1)
     hash2 = sha256(algo.salt2, hash1, algo.salt2)
@@ -367,7 +349,8 @@ def compute_hash(
 
 
 def compute_digest(
-    algo: types.PasswordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow, password: str
+    algo: types.PasswordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow,
+    password: str,
 ):
     try:
         check_prime_and_good(algo.p, algo.g)
@@ -375,19 +358,22 @@ def compute_digest(
         raise ValueError("bad p/g in password")
 
     value = pow(
-        algo.g, int.from_bytes(compute_hash(algo, password), "big"), int.from_bytes(algo.p, "big")
+        algo.g,
+        int.from_bytes(compute_hash(algo, password), "big"),
+        int.from_bytes(algo.p, "big"),
     )
 
     return big_num_for_hash(value)
 
-
-# https://github.com/telegramdesktop/tdesktop/blob/18b74b90451a7db2379a9d753c9cbaf8734b4d5d/Telegram/SourceFiles/core/core_cloud_password.cpp
+#https: // github.com/telegramdesktop/tdesktop/blob/18b74b90451a7db2379a9d753c9cbaf8734b4d5d/Telegram/SourceFiles/core/core_cloud_password.cpp
 def compute_check(request: types.account.Password, password: str):
     algo = request.current_algo
     if not isinstance(
         algo, types.PasswordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow
     ):
-        raise ValueError("unsupported password algorithm {}".format(algo.__class__.__name__))
+        raise ValueError(
+            "unsupported password algorithm {}".format(algo.__class__.__name__)
+        )
 
     pw_hash = compute_hash(algo, password)
 
@@ -419,25 +405,10 @@ def compute_check(request: types.account.Password, password: str):
             if is_good_mod_exp_first(A, p):
                 a_for_hash = big_num_for_hash(A)
                 u = int.from_bytes(sha256(a_for_hash, b_for_hash), "big")
-                if u > 0:
-                    return (a, a_for_hash, u)
+                if u > 0 : return (a, a_for_hash, u)
 
-    a, a_for_hash, u = generate_and_check_random()
-    g_b = (B - kg_x) % p
-    if not is_good_mod_exp_first(g_b, p):
-        raise ValueError("bad g_b")
+                                                                                                                                                                                                                                                                                                                                                          a, a_for_hash, u = generate_and_check_random() g_b =(B - kg_x) % p if not is_good_mod_exp_first(g_b, p) :raise ValueError("bad g_b")
 
-    ux = u * x
-    a_ux = a + ux
-    S = pow(g_b, a_ux, p)
-    K = sha256(big_num_for_hash(S))
-    M1 = sha256(
-        xor(sha256(p_for_hash), sha256(g_for_hash)),
-        sha256(algo.salt1),
-        sha256(algo.salt2),
-        a_for_hash,
-        b_for_hash,
-        K,
-    )
+                                                                                                                                                                                                                                                                                                                                                                                                                                                              ux = u * x a_ux = a + ux S = pow(g_b, a_ux, p) K = sha256(big_num_for_hash(S)) M1 = sha256(xor(sha256(p_for_hash), sha256(g_for_hash)), sha256(algo.salt1), sha256(algo.salt2), a_for_hash, b_for_hash, K, )
 
-    return types.InputCheckPasswordSRP(request.srp_id, bytes(a_for_hash), bytes(M1))
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             return types.InputCheckPasswordSRP(request.srp_id, bytes(a_for_hash), bytes(M1))

@@ -13,7 +13,9 @@ class ObfuscatedIO:
         self._reader = connection._reader
         self._writer = connection._writer
 
-        self.header, self._encrypt, self._decrypt = self.init_header(connection.packet_codec)
+        self.header, self._encrypt, self._decrypt = self.init_header(
+            connection.packet_codec
+        )
 
     @staticmethod
     def init_header(packet_codec):
@@ -21,7 +23,11 @@ class ObfuscatedIO:
         keywords = (b"PVrG", b"GET ", b"POST", b"\xee\xee\xee\xee")
         while True:
             random = os.urandom(64)
-            if random[0] != 0xEF and random[:4] not in keywords and random[4:8] != b"\0\0\0\0":
+            if (
+                random[0] != 0xEF
+                and random[:4] not in keywords
+                and random[4:8] != b"\0\0\0\0"
+            ):
                 break
 
         random = bytearray(random)

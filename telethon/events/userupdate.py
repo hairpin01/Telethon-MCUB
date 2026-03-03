@@ -55,11 +55,15 @@ class UserUpdate(EventBuilder):
             return cls.Event(types.PeerUser(update.user_id), status=update.status)
         elif isinstance(update, types.UpdateChannelUserTyping):
             return cls.Event(
-                update.from_id, chat_peer=types.PeerChannel(update.channel_id), typing=update.action
+                update.from_id,
+                chat_peer=types.PeerChannel(update.channel_id),
+                typing=update.action,
             )
         elif isinstance(update, types.UpdateChatUserTyping):
             return cls.Event(
-                update.from_id, chat_peer=types.PeerChat(update.chat_id), typing=update.action
+                update.from_id,
+                chat_peer=types.PeerChat(update.chat_id),
+                typing=update.action,
             )
         elif isinstance(update, types.UpdateUserTyping):
             return cls.Event(update.user_id, typing=update.action)
@@ -195,7 +199,10 @@ class UserUpdate(EventBuilder):
             """
             return isinstance(
                 self.action,
-                (types.SendMessageRecordAudioAction, types.SendMessageUploadAudioAction),
+                (
+                    types.SendMessageRecordAudioAction,
+                    types.SendMessageUploadAudioAction,
+                ),
             )
 
         @property
@@ -206,7 +213,10 @@ class UserUpdate(EventBuilder):
             """
             return isinstance(
                 self.action,
-                (types.SendMessageRecordRoundAction, types.SendMessageUploadRoundAction),
+                (
+                    types.SendMessageRecordRoundAction,
+                    types.SendMessageUploadRoundAction,
+                ),
             )
 
         @property
@@ -217,7 +227,10 @@ class UserUpdate(EventBuilder):
             """
             return isinstance(
                 self.action,
-                (types.SendMessageRecordVideoAction, types.SendMessageUploadVideoAction),
+                (
+                    types.SendMessageRecordVideoAction,
+                    types.SendMessageUploadVideoAction,
+                ),
             )
 
         @property
@@ -272,7 +285,10 @@ class UserUpdate(EventBuilder):
 
         def _last_seen_delta(self):
             if isinstance(self.status, types.UserStatusOffline):
-                return datetime.datetime.now(tz=datetime.timezone.utc) - self.status.was_online
+                return (
+                    datetime.datetime.now(tz=datetime.timezone.utc)
+                    - self.status.was_online
+                )
             elif isinstance(self.status, types.UserStatusOnline):
                 return datetime.timedelta(days=0)
             elif isinstance(self.status, types.UserStatusRecently):

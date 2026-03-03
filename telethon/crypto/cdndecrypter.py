@@ -64,7 +64,8 @@ class CdnDecrypter:
             # We need to use the original client here
             await client(
                 ReuploadCdnFileRequest(
-                    file_token=cdn_redirect.file_token, request_token=cdn_file.request_token
+                    file_token=cdn_redirect.file_token,
+                    request_token=cdn_file.request_token,
                 )
             )
 

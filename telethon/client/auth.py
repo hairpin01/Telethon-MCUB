@@ -118,7 +118,8 @@ class AuthMethods:
 
         if phone and bot_token and not callable(phone):
             raise ValueError(
-                "Both a phone and a bot token provided, " "must only provide one of either"
+                "Both a phone and a bot token provided, "
+                "must only provide one of either"
             )
 
         coro = self._start(
@@ -354,10 +355,15 @@ class AuthMethods:
             request = functions.auth.SignInRequest(phone, phone_code_hash, str(code))
         elif password:
             pwd = await self(functions.account.GetPasswordRequest())
-            request = functions.auth.CheckPasswordRequest(pwd_mod.compute_check(pwd, password))
+            request = functions.auth.CheckPasswordRequest(
+                pwd_mod.compute_check(pwd, password)
+            )
         elif bot_token:
             request = functions.auth.ImportBotAuthorizationRequest(
-                flags=0, bot_auth_token=bot_token, api_id=self.api_id, api_hash=self.api_hash
+                flags=0,
+                bot_auth_token=bot_token,
+                api_id=self.api_id,
+                api_hash=self.api_hash,
             )
         else:
             raise ValueError(
@@ -407,7 +413,9 @@ class AuthMethods:
         state = await self(functions.updates.GetStateRequest())
         # the server may send an old qts in getState
         difference = await self(
-            functions.updates.GetDifferenceRequest(pts=state.pts, date=state.date, qts=state.qts)
+            functions.updates.GetDifferenceRequest(
+                pts=state.pts, date=state.date, qts=state.qts
+            )
         )
 
         if isinstance(difference, types.updates.Difference):
@@ -418,14 +426,20 @@ class AuthMethods:
             state.pts = difference.pts
 
         self._message_box.load(
-            SessionState(0, 0, 0, state.pts, state.qts, int(state.date.timestamp()), state.seq, 0),
+            SessionState(
+                0, 0, 0, state.pts, state.qts, int(state.date.timestamp()), state.seq, 0
+            ),
             [],
         )
 
         return user
 
     async def send_code_request(
-        self: "TelegramClient", phone: str, *, force_sms: bool = False, _retry_count: int = 0
+        self: "TelegramClient",
+        phone: str,
+        *,
+        force_sms: bool = False,
+        _retry_count: int = 0,
     ) -> "types.auth.SentCode":
         """
         Sends the Telegram code needed to login to the given phone number.

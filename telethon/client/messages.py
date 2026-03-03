@@ -97,7 +97,9 @@ class _MessagesIter(RequestIter):
                 limit=1,
             )
         elif scheduled:
-            self.request = functions.messages.GetScheduledHistoryRequest(peer=entity, hash=0)
+            self.request = functions.messages.GetScheduledHistoryRequest(
+                peer=entity, hash=0
+            )
         elif reply_to is not None:
             self.request = functions.messages.GetRepliesRequest(
                 peer=self.entity,
@@ -154,7 +156,9 @@ class _MessagesIter(RequestIter):
                 and not search
                 and not offset_id
             ):
-                async for m in self.client.iter_messages(self.entity, 1, offset_date=offset_date):
+                async for m in self.client.iter_messages(
+                    self.entity, 1, offset_date=offset_date
+                ):
                     self.request.offset_id = m.id + 1
         else:
             self.request = functions.messages.GetHistoryRequest(
@@ -239,7 +243,9 @@ class _MessagesIter(RequestIter):
         #
         # We also assume the API will always return, at least, one message if
         # there is more to fetch.
-        if not r.messages or (not self.reverse and r.messages[0].id <= self.request.limit):
+        if not r.messages or (
+            not self.reverse and r.messages[0].id <= self.request.limit
+        ):
             return True
 
         # Get the last message that's not empty (in some rare cases
@@ -321,7 +327,9 @@ class _IDsIter(RequestIter):
         from_id = None  # By default, no need to validate from_id
         if self._ty == helpers._EntityType.CHANNEL:
             try:
-                r = await self.client(functions.channels.GetMessagesRequest(self._entity, ids))
+                r = await self.client(
+                    functions.channels.GetMessagesRequest(self._entity, ids)
+                )
             except errors.MessageIdsEmptyError:
                 # All IDs were invalid, use a dummy result
                 r = types.messages.MessagesNotModified(len(ids))
@@ -345,7 +353,9 @@ class _IDsIter(RequestIter):
         # since the user can enter arbitrary numbers which can belong to
         # arbitrary chats. Validate these unless ``from_id is None``.
         for message in r.messages:
-            if isinstance(message, types.MessageEmpty) or (from_id and message.peer_id != from_id):
+            if isinstance(message, types.MessageEmpty) or (
+                from_id and message.peer_id != from_id
+            ):
                 self.buffer.append(None)
             else:
                 message._finish_init(self.client, entities, self._entity)
@@ -647,7 +657,9 @@ class MessageMethods:
         reply_to: "typing.Union[int, types.Message]" = None,
         attributes: "typing.Sequence[types.TypeDocumentAttribute]" = None,
         parse_mode: typing.Optional[str] = (),
-        formatting_entities: typing.Optional[typing.List[types.TypeMessageEntity]] = None,
+        formatting_entities: typing.Optional[
+            typing.List[types.TypeMessageEntity]
+        ] = None,
         link_preview: bool = True,
         file: "typing.Union[hints.FileLike, typing.Sequence[hints.FileLike]]" = None,
         thumb: "hints.FileLike" = None,
@@ -894,7 +906,9 @@ class MessageMethods:
             if silent is None:
                 silent = message.silent
 
-            if message.media and not isinstance(message.media, types.MessageMediaWebPage):
+            if message.media and not isinstance(
+                message.media, types.MessageMediaWebPage
+            ):
                 return await self.send_file(
                     entity,
                     message.media,
@@ -915,7 +929,9 @@ class MessageMethods:
                 message=message.message or "",
                 silent=silent,
                 background=background,
-                reply_to=None if reply_to is None else types.InputReplyToMessage(reply_to),
+                reply_to=(
+                    None if reply_to is None else types.InputReplyToMessage(reply_to)
+                ),
                 reply_markup=markup,
                 entities=message.entities,
                 clear_draft=clear_draft,
@@ -927,16 +943,22 @@ class MessageMethods:
             message = message.message
         else:
             if formatting_entities is None:
-                message, formatting_entities = await self._parse_message_text(message, parse_mode)
+                message, formatting_entities = await self._parse_message_text(
+                    message, parse_mode
+                )
             if not message:
-                raise ValueError("The message cannot be empty unless a file is provided")
+                raise ValueError(
+                    "The message cannot be empty unless a file is provided"
+                )
 
             request = functions.messages.SendMessageRequest(
                 peer=entity,
                 message=message,
                 entities=formatting_entities,
                 no_webpage=not link_preview,
-                reply_to=None if reply_to is None else types.InputReplyToMessage(reply_to),
+                reply_to=(
+                    None if reply_to is None else types.InputReplyToMessage(reply_to)
+                ),
                 clear_draft=clear_draft,
                 silent=silent,
                 background=background,
@@ -1054,7 +1076,9 @@ class MessageMethods:
                 await client.send_message(chat, message)
         """
         if as_album is not None:
-            warnings.warn("the as_album argument is deprecated and no longer has any effect")
+            warnings.warn(
+                "the as_album argument is deprecated and no longer has any effect"
+            )
 
         single = not utils.is_list_like(messages)
         if single:
@@ -1113,7 +1137,9 @@ class MessageMethods:
                             orig_id = orig if isinstance(orig, int) else None
 
                         if orig_id in RESTRICT_IDS:
-                            raise ValueError("Forwarding messages from this user is forbidden")
+                            raise ValueError(
+                                "Forwarding messages from this user is forbidden"
+                            )
                     except ValueError:
                         raise
                     except Exception:
@@ -1143,7 +1169,9 @@ class MessageMethods:
         *,
         parse_mode: str = (),
         attributes: "typing.Sequence[types.TypeDocumentAttribute]" = None,
-        formatting_entities: typing.Optional[typing.List[types.TypeMessageEntity]] = None,
+        formatting_entities: typing.Optional[
+            typing.List[types.TypeMessageEntity]
+        ] = None,
         link_preview: bool = True,
         file: "hints.FileLike" = None,
         thumb: "hints.FileLike" = None,
@@ -1263,7 +1291,9 @@ class MessageMethods:
                 # or
                 await client.edit_message(message, 'hello!!!')
         """
-        if isinstance(entity, (types.InputBotInlineMessageID, types.InputBotInlineMessageID64)):
+        if isinstance(
+            entity, (types.InputBotInlineMessageID, types.InputBotInlineMessageID64)
+        ):
             text = text or message
             message = entity
         elif isinstance(entity, types.Message):
@@ -1281,7 +1311,9 @@ class MessageMethods:
             force_document=force_document,
         )
 
-        if isinstance(entity, (types.InputBotInlineMessageID, types.InputBotInlineMessageID64)):
+        if isinstance(
+            entity, (types.InputBotInlineMessageID, types.InputBotInlineMessageID64)
+        ):
             request = functions.messages.EditInlineBotMessageRequest(
                 id=entity,
                 message=text,
@@ -1378,7 +1410,9 @@ class MessageMethods:
                 if isinstance(m, inline_types)
                 else (
                     m.id
-                    if isinstance(m, (types.Message, types.MessageService, types.MessageEmpty))
+                    if isinstance(
+                        m, (types.Message, types.MessageService, types.MessageEmpty)
+                    )
                     else int(m)
                 )
             )
@@ -1497,7 +1531,9 @@ class MessageMethods:
                     )
                 )
             else:
-                return await self(functions.messages.ReadHistoryRequest(entity, max_id=max_id))
+                return await self(
+                    functions.messages.ReadHistoryRequest(entity, max_id=max_id)
+                )
 
         return False
 
@@ -1540,7 +1576,9 @@ class MessageMethods:
                 message = await client.send_message(chat, 'Pinotifying is fun!')
                 await client.pin_message(chat, message, notify=True)
         """
-        return await self._pin(entity, message, unpin=False, notify=notify, pm_oneside=pm_oneside)
+        return await self._pin(
+            entity, message, unpin=False, notify=notify, pm_oneside=pm_oneside
+        )
 
     async def unpin_message(
         self: "TelegramClient",
@@ -1580,7 +1618,11 @@ class MessageMethods:
             return
 
         request = functions.messages.UpdatePinnedMessageRequest(
-            peer=entity, id=message, silent=not notify, unpin=unpin, pm_oneside=pm_oneside
+            peer=entity,
+            id=message,
+            silent=not notify,
+            unpin=unpin,
+            pm_oneside=pm_oneside,
         )
         result = await self(request)
 

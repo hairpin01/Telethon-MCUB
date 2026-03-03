@@ -167,7 +167,9 @@ class MTProtoSender:
 
     def _transport_connected(self):
         return (
-            not self._reconnecting and self._connection is not None and self._connection._connected
+            not self._reconnecting
+            and self._connection is not None
+            and self._connection._connected
         )
 
     async def disconnect(self):
@@ -297,7 +299,9 @@ class MTProtoSender:
                     "Connection to Telegram failed {} time(s)".format(self._retries)
                 )
 
-            e = ConnectionError("auth_key generation failed {} time(s)".format(self._retries))
+            e = ConnectionError(
+                "auth_key generation failed {} time(s)".format(self._retries)
+            )
             await self._disconnect(error=e)
             raise e
 
@@ -333,8 +337,8 @@ class MTProtoSender:
         plain = MTProtoPlainSender(self._connection, loggers=self._loggers)
         try:
             self._log.debug("New auth_key attempt %d...", attempt)
-            self.auth_key.key, self._state.time_offset = await authenticator.do_authentication(
-                plain
+            self.auth_key.key, self._state.time_offset = (
+                await authenticator.do_authentication(plain)
             )
 
             # This is *EXTREMELY* important since we don't control
@@ -362,7 +366,9 @@ class MTProtoSender:
             self._log.debug("Closing current connection...")
             await self._connection.disconnect()
         finally:
-            self._log.debug("Cancelling %d pending message(s)...", len(self._pending_state))
+            self._log.debug(
+                "Cancelling %d pending message(s)...", len(self._pending_state)
+            )
             for state in self._pending_state.values():
                 if error and not state.future.done():
                     state.future.set_exception(error)
@@ -419,7 +425,9 @@ class MTProtoSender:
             except (IOError, asyncio.TimeoutError) as e:
                 last_error = e
                 self._log.info(
-                    "Failed reconnection attempt %d with %s", attempt, e.__class__.__name__
+                    "Failed reconnection attempt %d with %s",
+                    attempt,
+                    e.__class__.__name__,
                 )
                 await asyncio.sleep(self._delay)
             except BufferError as e:
@@ -436,7 +444,9 @@ class MTProtoSender:
 
             except Exception as e:
                 last_error = e
-                self._log.exception("Unexpected exception reconnecting on " "attempt %d", attempt)
+                self._log.exception(
+                    "Unexpected exception reconnecting on " "attempt %d", attempt
+                )
 
                 await asyncio.sleep(self._delay)
             else:
@@ -444,7 +454,9 @@ class MTProtoSender:
                 self._pending_state.clear()
 
                 if self._auto_reconnect_callback:
-                    helpers.get_running_loop().create_task(self._auto_reconnect_callback())
+                    helpers.get_running_loop().create_task(
+                        self._auto_reconnect_callback()
+                    )
 
                 break
         else:
@@ -512,7 +524,9 @@ class MTProtoSender:
                 continue
 
             self._log.debug(
-                "Encrypting %d message(s) in %d bytes for sending", len(batch), len(data)
+                "Encrypting %d message(s) in %d bytes for sending",
+                len(batch),
+                len(data),
             )
 
             data = self._state.encrypt_message_data(data)
@@ -559,7 +573,9 @@ class MTProtoSender:
                 return
             except InvalidBufferError as e:
                 if e.code == 429:
-                    self._log.warning("Server indicated flood error at transport level: %s", e)
+                    self._log.warning(
+                        "Server indicated flood error at transport level: %s", e
+                    )
                     await self._disconnect(error=e)
                 else:
                     self._log.exception("Server sent invalid buffer")
@@ -577,13 +593,17 @@ class MTProtoSender:
             except TypeNotFoundError as e:
                 # Received object which we don't know how to deserialize
                 self._log.info(
-                    "Type %08x not found, remaining data %r", e.invalid_constructor_id, e.remaining
+                    "Type %08x not found, remaining data %r",
+                    e.invalid_constructor_id,
+                    e.remaining,
                 )
                 continue
             except SecurityError as e:
                 # A step while decoding had the incorrect data. This message
                 # should not be considered safe and it should be ignored.
-                self._log.warning("Security error while unpacking a " "received message: %s", e)
+                self._log.warning(
+                    "Security error while unpacking a " "received message: %s", e
+                )
                 continue
             except BufferError as e:
                 if isinstance(e, InvalidBufferError) and e.code == 404:
@@ -664,14 +684,18 @@ class MTProtoSender:
             # "BufferError: No more data left to read (need 4, got 0: b''); last read None".
             # This seems to be particularly common for "RpcError(error_code=-500, error_message='No workers running')".
             if rpc_result.error:
-                self._log.info("Received error without parent request: %s", rpc_result.error)
+                self._log.info(
+                    "Received error without parent request: %s", rpc_result.error
+                )
             else:
                 try:
                     with BinaryReader(rpc_result.body) as reader:
                         if not isinstance(reader.tgread_object(), upload.File):
                             raise ValueError("Not an upload.File")
                 except (TypeNotFoundError, ValueError):
-                    self._log.info("Received response without parent request: %s", rpc_result.body)
+                    self._log.info(
+                        "Received response without parent request: %s", rpc_result.body
+                    )
             return
 
         if rpc_result.error:
@@ -752,7 +776,9 @@ class MTProtoSender:
     ):
         try:
             if obj.CONSTRUCTOR_ID in _update_ids:
-                obj._self_outgoing = True  # flag to only process, but not dispatch these
+                obj._self_outgoing = (
+                    True  # flag to only process, but not dispatch these
+                )
                 self._updates_queue.put_nowait(obj)
             elif obj.CONSTRUCTOR_ID in _update_like_ids:
                 # Ugly "hack" (?) - otherwise bots reliably detect gaps when deleting messages.
@@ -766,7 +792,9 @@ class MTProtoSender:
                 # `updateDeleteMessages` is probably the "least-invasive" update that can be used.
                 upd = _tl.UpdateShort(
                     _tl.UpdateDeleteMessages([], obj.pts, obj.pts_count),
-                    datetime.datetime(*time.gmtime(0)[:6]).replace(tzinfo=datetime.timezone.utc),
+                    datetime.datetime(*time.gmtime(0)[:6]).replace(
+                        tzinfo=datetime.timezone.utc
+                    ),
                 )
                 upd._self_outgoing = True
                 self._updates_queue.put_nowait(upd)
@@ -836,7 +864,9 @@ class MTProtoSender:
             self._state._sequence -= 16
         else:
             for state in states:
-                state.future.set_exception(BadMessageError(state.request, bad_msg.error_code))
+                state.future.set_exception(
+                    BadMessageError(state.request, bad_msg.error_code)
+                )
             return
 
         # Messages are to be re-sent once we've corrected the issue
@@ -924,7 +954,9 @@ class MTProtoSender:
         """
         self._send_queue.append(
             RequestState(
-                MsgsStateInfo(req_msg_id=message.msg_id, info=chr(1) * len(message.obj.msg_ids))
+                MsgsStateInfo(
+                    req_msg_id=message.msg_id, info=chr(1) * len(message.obj.msg_ids)
+                )
             )
         )
 

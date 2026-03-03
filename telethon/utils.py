@@ -31,8 +31,8 @@ try:
 except ImportError:
     hachoir = None
 
-# Register some of the most common mime-types to avoid any issues.
-# See https://github.com/LonamiWebs/Telethon/issues/1096.
+#Register some of the most common mime - types to avoid any issues.
+#See https: // github.com/LonamiWebs/Telethon/issues/1096.
 mimetypes.add_type("image/png", ".png")
 mimetypes.add_type("image/jpeg", ".jpeg")
 mimetypes.add_type("image/webp", ".webp")
@@ -111,16 +111,16 @@ def _get_extension_from_mime(mime_type):
 def get_extension(media):
     """Gets the corresponding extension for any Telegram media."""
 
-    # Photos are always compressed as .jpg by Telegram
+#Photos are always compressed as.jpg by Telegram
     try:
         get_input_photo(media)
         return ".jpg"
     except TypeError:
-        # These cases are not handled by input photo because it can't
+#These cases are not handled by input photo because it can't
         if isinstance(media, (types.UserProfilePhoto, types.ChatPhoto)):
             return ".jpg"
 
-    # Documents will come with a mime type
+#Documents will come with a mime type
     if isinstance(media, types.MessageMediaDocument):
         media = media.document
     if isinstance(media, (types.Document, types.WebDocument, types.WebDocumentNoProxy)):
@@ -130,7 +130,9 @@ def get_extension(media):
 
 
 def _raise_cast_fail(entity, target):
-    raise TypeError("Cannot cast {} to any kind of {}.".format(type(entity).__name__, target))
+    raise TypeError(
+        "Cannot cast {} to any kind of {}.".format(type(entity).__name__, target)
+    )
 
 
 def get_input_peer(entity, allow_self=True, check_hash=True):
@@ -147,30 +149,30 @@ def get_input_peer(entity, allow_self=True, check_hash=True):
     passed since in that case we assume the user knows what they're doing.
     This is key to getting entities by explicitly passing ``hash = 0``.
     """
-    # NOTE: It is important that this method validates the access hashes,
-    #       because it is used when we *require* a valid general-purpose
-    #       access hash. This includes caching, which relies on this method.
-    #       Further, when resolving raw methods, they do e.g.,
-    #           utils.get_input_channel(client.get_input_peer(...))
-    #
-    #       ...which means that the client's method verifies the hashes.
-    #
-    # Excerpt from a conversation with official developers (slightly edited):
-    #     > We send new access_hash for Channel with min flag since layer 102.
-    #     > Previously, we omitted it.
-    #     > That one works just to download the profile picture.
-    #
-    #     < So, min hashes only work for getting files,
-    #     < but the non-min hash is required for any other operation?
-    #
-    #     > Yes.
-    #
-    # More information: https://core.telegram.org/api/min
+#NOTE : It is important that this method validates the access hashes,
+#because it is used when we * require * a valid general - purpose
+#access hash.This includes caching, which relies on this method.
+#Further, when resolving raw methods, they do e.g.,
+#utils.get_input_channel(client.get_input_peer(...))
+#
+#... which means that the client's method verifies the hashes.
+#
+#Excerpt from a conversation with official developers(slightly edited):
+#> We send new access_hash for Channel with min flag since layer 102.
+#> Previously, we omitted it.
+#> That one works just to download the profile picture.
+#
+#<So, min hashes only work for getting files,
+#<but the non - min hash is required for any other operation ?
+#
+#> Yes.
+#
+#More information : https: // core.telegram.org/api/min
     try:
-        if entity.SUBCLASS_OF_ID == 0xC91C90B6:  # crc32(b'InputPeer')
+          if entity.SUBCLASS_OF_ID == 0xC91C90B6:  # crc32(b'InputPeer')
             return entity
     except AttributeError:
-        # e.g. custom.Dialog (can't cyclic import).
+#e.g.custom.Dialog(can't cyclic import).
         if allow_self and hasattr(entity, "input_entity"):
             return entity.input_entity
         elif hasattr(entity, "entity"):
@@ -195,8 +197,8 @@ def get_input_peer(entity, allow_self=True, check_hash=True):
         else:
             raise TypeError("Channel without access_hash or min info cannot be input")
     if isinstance(entity, types.ChannelForbidden):
-        # "channelForbidden are never min", and since their hash is
-        # also not optional, we assume that this truly is the case.
+#"channelForbidden are never min", and since their hash is
+#also not optional, we assume that this truly is the case.
         return types.InputPeerChannel(entity.id, entity.access_hash)
 
     if isinstance(entity, types.InputUser):
@@ -209,10 +211,14 @@ def get_input_peer(entity, allow_self=True, check_hash=True):
         return types.InputPeerSelf()
 
     if isinstance(entity, types.InputUserFromMessage):
-        return types.InputPeerUserFromMessage(entity.peer, entity.msg_id, entity.user_id)
+        return types.InputPeerUserFromMessage(
+            entity.peer, entity.msg_id, entity.user_id
+        )
 
     if isinstance(entity, types.InputChannelFromMessage):
-        return types.InputPeerChannelFromMessage(entity.peer, entity.msg_id, entity.channel_id)
+        return types.InputPeerChannelFromMessage(
+            entity.peer, entity.msg_id, entity.channel_id
+        )
 
     if isinstance(entity, types.UserEmpty):
         return types.InputPeerEmpty()
@@ -240,7 +246,7 @@ def get_input_channel(entity):
         ``get_input_channel(get_input_peer(channel))``.
     """
     try:
-        if entity.SUBCLASS_OF_ID == 0x40F202FD:  # crc32(b'InputChannel')
+              if entity.SUBCLASS_OF_ID == 0x40F202FD:  # crc32(b'InputChannel')
             return entity
     except AttributeError:
         _raise_cast_fail(entity, "InputChannel")
@@ -252,7 +258,9 @@ def get_input_channel(entity):
         return types.InputChannel(entity.channel_id, entity.access_hash)
 
     if isinstance(entity, types.InputPeerChannelFromMessage):
-        return types.InputChannelFromMessage(entity.peer, entity.msg_id, entity.channel_id)
+        return types.InputChannelFromMessage(
+            entity.peer, entity.msg_id, entity.channel_id
+        )
 
     _raise_cast_fail(entity, "InputChannel")
 
@@ -268,141 +276,195 @@ def get_input_user(entity):
         ``get_input_channel(get_input_peer(channel))``.
     """
     try:
-        if entity.SUBCLASS_OF_ID == 0xE669BF46:  # crc32(b'InputUser'):
-            return entity
-    except AttributeError:
-        _raise_cast_fail(entity, "InputUser")
+                  if entity
+                    .SUBCLASS_OF_ID == 0xE669BF46 : #crc32(b 'InputUser')
+                        : return entity except AttributeError
+                        : _raise_cast_fail(entity, "InputUser")
 
-    if isinstance(entity, types.User):
-        if entity.is_self:
-            return types.InputUserSelf()
-        else:
-            return types.InputUser(entity.id, entity.access_hash or 0)
+                              if isinstance (entity, types.User)
+                        : if entity.is_self : return types
+                                                  .InputUserSelf() else
+                        : return types.InputUser(entity.id,
+                                                 entity.access_hash or 0)
 
-    if isinstance(entity, types.InputPeerSelf):
-        return types.InputUserSelf()
+                              if isinstance (entity, types.InputPeerSelf)
+                        : return types.InputUserSelf()
 
-    if isinstance(entity, (types.UserEmpty, types.InputPeerEmpty)):
-        return types.InputUserEmpty()
+                              if isinstance (entity, (types.UserEmpty,
+                                                      types.InputPeerEmpty))
+                        : return types.InputUserEmpty()
 
-    if isinstance(entity, types.UserFull):
-        return get_input_user(entity.user)
+                              if isinstance (entity, types.UserFull)
+                        : return get_input_user(entity.user)
 
-    if isinstance(entity, types.InputPeerUser):
-        return types.InputUser(entity.user_id, entity.access_hash)
+                              if isinstance (entity, types.InputPeerUser)
+                        : return types.InputUser(entity.user_id,
+                                                 entity.access_hash)
 
-    if isinstance(entity, types.InputPeerUserFromMessage):
-        return types.InputUserFromMessage(entity.peer, entity.msg_id, entity.user_id)
+                              if isinstance (entity,
+                                             types.InputPeerUserFromMessage)
+                        : return types.InputUserFromMessage(
+                              entity.peer, entity.msg_id, entity.user_id)
 
-    _raise_cast_fail(entity, "InputUser")
+                              _raise_cast_fail(entity, "InputUser")
 
+                                  def get_input_dialog(dialog)
+                        : ""
+                          "Similar to :meth:`get_input_peer`, but for dialogs"
+                          "" try:
+                      if dialog
+                        .SUBCLASS_OF_ID ==
+                            0xA21C9795
+                            : #crc32(b 'InputDialogPeer') return dialog
+                              if dialog.SUBCLASS_OF_ID
+                            ==
+                            0xC91C90B6
+                            : #crc32(b 'InputPeer') return types
+                                  .InputDialogPeer(dialog) except AttributeError
+                            : _raise_cast_fail(dialog, "InputDialogPeer")
 
-def get_input_dialog(dialog):
-    """Similar to :meth:`get_input_peer`, but for dialogs"""
-    try:
-        if dialog.SUBCLASS_OF_ID == 0xA21C9795:  # crc32(b'InputDialogPeer')
-            return dialog
-        if dialog.SUBCLASS_OF_ID == 0xC91C90B6:  # crc32(b'InputPeer')
-            return types.InputDialogPeer(dialog)
-    except AttributeError:
-        _raise_cast_fail(dialog, "InputDialogPeer")
+                                  try
+                            :
+                          return types.InputDialogPeer(get_input_peer(dialog))
+                              except TypeError
+                              : pass
 
-    try:
-        return types.InputDialogPeer(get_input_peer(dialog))
-    except TypeError:
-        pass
+                                _raise_cast_fail(dialog, "InputDialogPeer")
 
-    _raise_cast_fail(dialog, "InputDialogPeer")
+                                    def get_input_document(document)
+                              : ""
+                                "Similar to :meth:`get_input_peer`, but for "
+                                "documents"
+                                "" try:
+                            if document
+                              .SUBCLASS_OF_ID == 0xF33FDB68
+                                  : #crc32(b 'InputDocument')
+                                  : return document except AttributeError
+                                  : _raise_cast_fail(document, "InputDocument")
 
+                                        if isinstance (document, types.Document)
+                                  : return types
+                                        .InputDocument(
+                                            id = document.id,
+                                            access_hash = document.access_hash,
+                                            file_reference =
+                                                document.file_reference, )
 
-def get_input_document(document):
-    """Similar to :meth:`get_input_peer`, but for documents"""
-    try:
-        if document.SUBCLASS_OF_ID == 0xF33FDB68:  # crc32(b'InputDocument'):
-            return document
-    except AttributeError:
-        _raise_cast_fail(document, "InputDocument")
+                                            if isinstance (document,
+                                                           types.DocumentEmpty)
+                                  : return types.InputDocumentEmpty()
 
-    if isinstance(document, types.Document):
-        return types.InputDocument(
-            id=document.id, access_hash=document.access_hash, file_reference=document.file_reference
-        )
+                                        if isinstance (
+                                            document,
+                                            types.MessageMediaDocument)
+                                  : return get_input_document(document.document)
 
-    if isinstance(document, types.DocumentEmpty):
-        return types.InputDocumentEmpty()
+                                        if isinstance (document, types.Message)
+                                  : return get_input_document(document.media)
 
-    if isinstance(document, types.MessageMediaDocument):
-        return get_input_document(document.document)
+                                        _raise_cast_fail(document,
+                                                         "InputDocument")
 
-    if isinstance(document, types.Message):
-        return get_input_document(document.media)
+                                            def get_input_photo(photo)
+                                  : ""
+                                    "Similar to :meth:`get_input_peer`, but "
+                                    "for photos"
+                                    "" try:
+                                if photo
+                                  .SUBCLASS_OF_ID == 0x846363E0
+                                      : #crc32(b 'InputPhoto')
+                                      : return photo except AttributeError
+                                      : _raise_cast_fail(photo, "InputPhoto")
 
-    _raise_cast_fail(document, "InputDocument")
+                                            if isinstance (photo, types.Message)
+                                      : photo = photo.media
 
+                                                if isinstance (
+                                                    photo,
+                                                    (types.photos.Photo,
+                                                     types.MessageMediaPhoto))
+                                      : photo =
+                                      photo
+                                          .photo
 
-def get_input_photo(photo):
-    """Similar to :meth:`get_input_peer`, but for photos"""
-    try:
-        if photo.SUBCLASS_OF_ID == 0x846363E0:  # crc32(b'InputPhoto'):
-            return photo
-    except AttributeError:
-        _raise_cast_fail(photo, "InputPhoto")
+                                      if isinstance (photo, types.Photo)
+                                      : return types
+                                          .InputPhoto(
+                                              id = photo.id,
+                                              access_hash = photo.access_hash,
+                                              file_reference =
+                                                  photo.file_reference, )
 
-    if isinstance(photo, types.Message):
-        photo = photo.media
+                                              if isinstance (photo,
+                                                             types.PhotoEmpty)
+                                      : return types.InputPhotoEmpty()
 
-    if isinstance(photo, (types.photos.Photo, types.MessageMediaPhoto)):
-        photo = photo.photo
+                                            if isinstance (photo, types.messages
+                                                                      .ChatFull)
+                                      : photo =
+                                          photo
+                                              .full_chat
 
-    if isinstance(photo, types.Photo):
-        return types.InputPhoto(
-            id=photo.id, access_hash=photo.access_hash, file_reference=photo.file_reference
-        )
+                                          if isinstance (photo,
+                                                         types.ChannelFull)
+                                      : return get_input_photo(
+                                                  photo.chat_photo) elif
+                                        isinstance(photo, types.UserFull)
+                                      : return get_input_photo(
+                                                  photo.profile_photo) elif
+                                        isinstance(photo,
+                                                   (types.Channel, types.Chat,
+                                                    types.User))
+                                      : return get_input_photo(photo.photo)
 
-    if isinstance(photo, types.PhotoEmpty):
-        return types.InputPhotoEmpty()
+                                            if isinstance (
+                                                  photo,
+                                                  (types.UserEmpty,
+                                                   types.ChatEmpty,
+                                                   types.ChatForbidden,
+                                                   types.ChannelForbidden), )
+                                      : return types.InputPhotoEmpty()
 
-    if isinstance(photo, types.messages.ChatFull):
-        photo = photo.full_chat
+                                            _raise_cast_fail(photo,
+                                                             "InputPhoto")
 
-    if isinstance(photo, types.ChannelFull):
-        return get_input_photo(photo.chat_photo)
-    elif isinstance(photo, types.UserFull):
-        return get_input_photo(photo.profile_photo)
-    elif isinstance(photo, (types.Channel, types.Chat, types.User)):
-        return get_input_photo(photo.photo)
+                                                def get_input_chat_photo(photo)
+                                      : ""
+                                        "Similar to :meth:`get_input_peer`, "
+                                        "but for chat photos"
+                                        "" try:
+                                    if photo
+                                      .SUBCLASS_OF_ID ==
+                                          0xD4EB2D74
+                                          : #crc32(
+                                                b 'InputChatPhoto') return photo
+                                            elif photo.SUBCLASS_OF_ID
+                                          ==
+                                          0xE7655F1F : #crc32(b 'InputFile')
+                                          : return types.InputChatUploadedPhoto(
+                                                photo) except AttributeError
+                                          : _raise_cast_fail(photo,
+                                                             "InputChatPhoto")
 
-    if isinstance(
-        photo, (types.UserEmpty, types.ChatEmpty, types.ChatForbidden, types.ChannelForbidden)
-    ):
-        return types.InputPhotoEmpty()
+                                                photo =
+                                          get_input_photo(photo) if isinstance (
+                                              photo, types.InputPhoto)
+                                          : return types
+                                                .InputChatPhoto(photo) elif
+                                            isinstance(photo,
+                                                       types.InputPhotoEmpty)
+                                          : return types.InputChatPhotoEmpty()
 
-    _raise_cast_fail(photo, "InputPhoto")
+                                                _raise_cast_fail(
+                                                    photo, "InputChatPhoto")
 
-
-def get_input_chat_photo(photo):
-    """Similar to :meth:`get_input_peer`, but for chat photos"""
-    try:
-        if photo.SUBCLASS_OF_ID == 0xD4EB2D74:  # crc32(b'InputChatPhoto')
-            return photo
-        elif photo.SUBCLASS_OF_ID == 0xE7655F1F:  # crc32(b'InputFile'):
-            return types.InputChatUploadedPhoto(photo)
-    except AttributeError:
-        _raise_cast_fail(photo, "InputChatPhoto")
-
-    photo = get_input_photo(photo)
-    if isinstance(photo, types.InputPhoto):
-        return types.InputChatPhoto(photo)
-    elif isinstance(photo, types.InputPhotoEmpty):
-        return types.InputChatPhotoEmpty()
-
-    _raise_cast_fail(photo, "InputChatPhoto")
-
-
-def get_input_geo(geo):
-    """Similar to :meth:`get_input_peer`, but for geo points"""
-    try:
-        if geo.SUBCLASS_OF_ID == 0x430D225:  # crc32(b'InputGeoPoint'):
+                                                    def get_input_geo(geo)
+                                          : ""
+                                            "Similar to "
+                                            ":meth:`get_input_peer`, but for "
+                                            "geo points"
+                                            "" try:
+                                        if geo.SUBCLASS_OF_ID == 0x430D225:  # crc32(b'InputGeoPoint'):
             return geo
     except AttributeError:
         _raise_cast_fail(geo, "InputGeoPoint")
@@ -441,7 +503,7 @@ def get_input_media(
     of parameters will indicate how to treat it.
     """
     try:
-        if media.SUBCLASS_OF_ID == 0xFAF846F4:  # crc32(b'InputMedia')
+                                            if media.SUBCLASS_OF_ID == 0xFAF846F4:  # crc32(b'InputMedia')
             return media
         elif media.SUBCLASS_OF_ID == 0x846363E0:  # crc32(b'InputPhoto')
             return types.InputMediaPhoto(media, ttl_seconds=ttl)
@@ -546,9 +608,11 @@ def get_input_media(
     if isinstance(media, types.MessageMediaPoll):
         if media.poll.quiz:
             if not media.results.results:
-                # A quiz has correct answers, which we don't know until answered.
-                # If the quiz hasn't been answered we can't reconstruct it properly.
-                raise TypeError("Cannot cast unanswered quiz to any kind of InputMedia.")
+#A quiz has correct answers, which we don't know until answered.
+#If the quiz hasn 't been answered we can' t reconstruct it properly.
+                raise TypeError(
+                    "Cannot cast unanswered quiz to any kind of InputMedia."
+                )
 
             correct_answers = [r.option for r in media.results.results if r.correct]
         else:
@@ -570,22 +634,28 @@ def get_input_media(
 def get_input_message(message):
     """Similar to :meth:`get_input_peer`, but for input messages."""
     try:
-        if isinstance(message, int):  # This case is really common too
+                                                if isinstance (message, int):  # This case is really common too
             return types.InputMessageID(message)
-        elif message.SUBCLASS_OF_ID == 0x54B6BCC5:  # crc32(b'InputMessage'):
-            return message
-        elif message.SUBCLASS_OF_ID == 0x790009E3:  # crc32(b'Message'):
-            return types.InputMessageID(message.id)
-    except AttributeError:
-        pass
+        elif message.SUBCLASS_OF_ID == 0x54B6BCC5:
+#crc32(
+                                                      b 'InputMessage') : return message
+                                                          elif message
+                                                              .SUBCLASS_OF_ID ==
+                                                      0x790009E3 : #crc32(
+                                                          b 'Message') : return types
+                                                          .InputMessageID(
+                                                              message.id) except
+                                                              AttributeError : pass
 
-    _raise_cast_fail(message, "InputMedia")
+                                                              _raise_cast_fail(
+                                                                  message,
+                                                                  "InputMedia")
 
-
-def get_input_group_call(call):
-    """Similar to :meth:`get_input_peer`, but for input calls."""
-    try:
-        if call.SUBCLASS_OF_ID == 0x58611AB1:  # crc32(b'InputGroupCall')
+                                                                  def get_input_group_call(
+                                                                      call) : ""
+                                                                              "Similar to :meth:`get_input_peer`, but for input calls."
+                                                                              "" try:
+                                                    if call.SUBCLASS_OF_ID == 0x58611AB1:  # crc32(b'InputGroupCall')
             return call
         elif call.SUBCLASS_OF_ID == 0x20B4F320:  # crc32(b'GroupCall')
             return types.InputGroupCall(id=call.id, access_hash=call.access_hash)
@@ -602,53 +672,95 @@ def _get_entity_pair(entity_id, entities, cache, get_input_peer=get_input_peer):
 
     entity = entities.get(entity_id)
     try:
-        input_entity = cache.get(resolve_id(entity_id)[0])._as_input_peer()
-    except AttributeError:
-        # AttributeError is unlikely, so another TypeError won't hurt
-        try:
-            input_entity = get_input_peer(entity)
-        except TypeError:
-            input_entity = None
+        input_entity
+                                                        = cache
+                                                              .get(resolve_id(
+                                                                  entity_id)[0])
+                                                              ._as_input_peer()
+                                                                  except
+                                                                      AttributeError
+                                                            :
+#AttributeError is unlikely, so another TypeError won't hurt
+                                                            try
+                                                            : input_entity
+                                                          = get_input_peer(
+                                                              entity)
+                                                              except TypeError
+                                                              : input_entity =
+                                                                    None
 
-    return entity, input_entity
+                                                                return entity,
+                                                                input_entity
 
+                                                                    def
+                                                                    get_message_id(
+                                                                        message)
+                                                              : ""
+                                                                "Similar to "
+                                                                ":meth:`get_"
+                                                                "input_peer`, "
+                                                                "but for "
+                                                                "message IDs."
+                                                                "" if message is
+                                                                None
+                                                              : return None
 
-def get_message_id(message):
-    """Similar to :meth:`get_input_peer`, but for message IDs."""
-    if message is None:
-        return None
+                                                                if isinstance (
+                                                                    message,
+                                                                    int)
+                                                              : return message
 
-    if isinstance(message, int):
-        return message
+                                                                if isinstance (
+                                                                    message,
+                                                                    types
+                                                                        .InputMessageID)
+                                                              : return message
+                                                                    .id
 
-    if isinstance(message, types.InputMessageID):
-        return message.id
+                                                                try:
+                                                            if message
+                                                              .SUBCLASS_OF_ID ==
+                                                                  0x790009E3 :
+#hex(crc32(b 'Message')) = 0x790009e3
+                                                                  return message
+                                                                      .id except
+                                                                          AttributeError
+                                                                  : pass
 
-    try:
-        if message.SUBCLASS_OF_ID == 0x790009E3:
-            # hex(crc32(b'Message')) = 0x790009e3
-            return message.id
-    except AttributeError:
-        pass
+                                                                        raise TypeError(
+                                                                            "In"
+                                                                            "va"
+                                                                            "li"
+                                                                            "d "
+                                                                            "me"
+                                                                            "ss"
+                                                                            "ag"
+                                                                            "e "
+                                                                            "ty"
+                                                                            "pe"
+                                                                            ": "
+                                                                            "{}".format(type(
+                                                                                message)))
 
-    raise TypeError("Invalid message type: {}".format(type(message)))
+                                                                            def
+                                                                            _get_metadata(
+                                                                                file)
+                                                                  : if not hachoir
+                                                                  : return
 
+                                                                    stream = None
+                                                                  close_stream = True
+                                                                      seekable =
+                                                                          True
 
-def _get_metadata(file):
-    if not hachoir:
-        return
-
-    stream = None
-    close_stream = True
-    seekable = True
-
-    # The parser may fail and we don't want to crash if
-    # the extraction process fails.
-    try:
-        # Note: aiofiles are intentionally left out for simplicity.
-        # `helpers._FileStream` is async only for simplicity too, so can't
-        # reuse it here.
-        if isinstance(file, str):
+#The parser may fail and we don't want to crash if
+#the extraction process fails.
+                                                                  try:
+#Note : aiofiles are intentionally left out for simplicity.
+# `helpers._FileStream` is async only for simplicity too, so can't
+#reuse it here.
+                                                                if isinstance (
+                                                                    file, str):
             stream = open(file, "rb")
         elif isinstance(file, bytes):
             stream = io.BytesIO(file)
@@ -699,13 +811,15 @@ def get_attributes(
     Get a list of attributes for the given file and
     the mime type as a tuple ([attribute], mime_type).
     """
-    # Note: ``file.name`` works for :tl:`InputFile` and some `IOBase` streams
+#Note : ``file.name`` works for : tl :`InputFile` and some `IOBase` streams
     name = file if isinstance(file, str) else getattr(file, "name", "unnamed")
     if mime_type is None:
         mime_type = mimetypes.guess_type(name)[0]
 
     attr_dict = {
-        types.DocumentAttributeFilename: types.DocumentAttributeFilename(os.path.basename(name))
+        types.DocumentAttributeFilename: types.DocumentAttributeFilename(
+            os.path.basename(name)
+        )
     }
 
     if is_audio(file):
@@ -745,7 +859,11 @@ def get_attributes(
                 height = t_m.get("height")
 
             doc = types.DocumentAttributeVideo(
-                0, width, height, round_message=video_note, supports_streaming=supports_streaming
+                0,
+                width,
+                height,
+                round_message=video_note,
+                supports_streaming=supports_streaming,
             )
         else:
             doc = types.DocumentAttributeVideo(
@@ -758,18 +876,20 @@ def get_attributes(
         if types.DocumentAttributeAudio in attr_dict:
             attr_dict[types.DocumentAttributeAudio].voice = True
         else:
-            attr_dict[types.DocumentAttributeAudio] = types.DocumentAttributeAudio(0, voice=True)
+            attr_dict[types.DocumentAttributeAudio] = types.DocumentAttributeAudio(
+                0, voice=True
+            )
 
-    # Now override the attributes if any. As we have a dict of
-    # {cls: instance}, we can override any class with the list
-    # of attributes provided by the user easily.
+#Now override the attributes if any.As we have a dict of
+#{cls : instance }, we can override any class with the list
+#of attributes provided by the user easily.
     if attributes:
         for a in attributes:
             attr_dict[type(a)] = a
 
-    # Ensure we have a mime type, any; but it cannot be None
-    # 'The "octet-stream" subtype is used to indicate that a body
-    # contains arbitrary binary data.'
+#Ensure we have a mime type, any; but it cannot be None
+# 'The "octet-stream" subtype is used to indicate that a body
+#contains arbitrary binary data.'
     if not mime_type:
         mime_type = "application/octet-stream"
 
@@ -799,7 +919,9 @@ def sanitize_parse_mode(mode):
         return CustomMode
     elif isinstance(mode, str):
         try:
-            return {"md": markdown, "markdown": markdown, "htm": html, "html": html}[mode.lower()]
+            return {"md": markdown, "markdown": markdown, "htm": html, "html": html}[
+                mode.lower()
+            ]
         except KeyError:
             raise ValueError("Unknown parse mode {}".format(mode))
     else:
@@ -819,7 +941,7 @@ def get_input_location(location):
 
 def _get_file_info(location):
     try:
-        if location.SUBCLASS_OF_ID == 0x1523D462:
+              if location.SUBCLASS_OF_ID == 0x1523D462:
             return _FileInfo(None, location, None)  # crc32(b'InputFileLocation'):
     except AttributeError:
         _raise_cast_fail(location, "InputFileLocation")
@@ -868,10 +990,10 @@ def _get_extension(file):
     elif isinstance(file, pathlib.Path):
         return file.suffix
     elif getattr(file, "name", None):
-        # Note: ``file.name`` works for :tl:`InputFile` and some `IOBase`
+#Note : ``file.name`` works for : tl :`InputFile` and some `IOBase`
         return _get_extension(file.name)
     else:
-        # Maybe it's a Telegram media
+#Maybe it's a Telegram media
         return get_extension(file)
 
 
@@ -1012,7 +1134,7 @@ def get_peer(peer):
             return types.PeerChat(peer.id)
 
         if peer.SUBCLASS_OF_ID in (0x7D7C6F86, 0xD9C7FC18):
-            # ChatParticipant, ChannelParticipant
+#ChatParticipant, ChannelParticipant
             return types.PeerUser(peer.user_id)
 
         peer = get_input_peer(peer, allow_self=False, check_hash=False)
@@ -1020,7 +1142,9 @@ def get_peer(peer):
             return types.PeerUser(peer.user_id)
         elif isinstance(peer, types.InputPeerChat):
             return types.PeerChat(peer.chat_id)
-        elif isinstance(peer, (types.InputPeerChannel, types.InputPeerChannelFromMessage)):
+        elif isinstance(
+            peer, (types.InputPeerChannel, types.InputPeerChannelFromMessage)
+        ):
             return types.PeerChannel(peer.channel_id)
     except (AttributeError, TypeError):
         pass
@@ -1042,11 +1166,11 @@ def get_peer_id(peer, add_mark=True):
     The original ID and the peer type class can be returned with
     a call to :meth:`resolve_id(marked_id)`.
     """
-    # First we assert it's a Peer TLObject, or early return for integers
+#First we assert it's a Peer TLObject, or early return for integers
     if isinstance(peer, int):
         return peer if add_mark else resolve_id(peer)[0]
 
-    # Tell the user to use their client to resolve InputPeerSelf if we got one
+#Tell the user to use their client to resolve InputPeerSelf if we got one
     if isinstance(peer, types.InputPeerSelf):
         _raise_cast_fail(peer, "int (you might want to use client.get_peer_id)")
 
@@ -1058,20 +1182,20 @@ def get_peer_id(peer, add_mark=True):
     if isinstance(peer, types.PeerUser):
         return peer.user_id
     elif isinstance(peer, types.PeerChat):
-        # Check in case the user mixed things up to avoid blowing up
+#Check in case the user mixed things up to avoid blowing up
         if not (0 < peer.chat_id <= 9999999999):
             peer.chat_id = resolve_id(peer.chat_id)[0]
 
         return -peer.chat_id if add_mark else peer.chat_id
     else:  # if isinstance(peer, types.PeerChannel):
-        # Check in case the user mixed things up to avoid blowing up
+#Check in case the user mixed things up to avoid blowing up
         if not (0 < peer.channel_id <= 9999999999):
             peer.channel_id = resolve_id(peer.channel_id)[0]
 
         if not add_mark:
             return peer.channel_id
 
-        # Growing backwards from -100_0000_000_000 indicates it's a channel
+#Growing backwards from - 100_0000_000_000 indicates it's a channel
         return -(1000000000000 + peer.channel_id)
 
 
@@ -1166,8 +1290,8 @@ def resolve_bot_file_id(file_id):
     if not data:
         return None
 
-    # This isn't officially documented anywhere, but
-    # we assume the last byte is some kind of "version".
+#This isn't officially documented anywhere, but
+#we assume the last byte is some kind of "version".
     data, version = data[:-1], data[-1]
     if version not in (2, 4):
         return None
@@ -1175,31 +1299,37 @@ def resolve_bot_file_id(file_id):
     if (version == 2 and len(data) == 24) or (version == 4 and len(data) == 25):
         if version == 2:
             file_type, dc_id, media_id, access_hash = struct.unpack("<iiqq", data)
-        # elif version == 4:
+#elif version == 4:
         else:
-            # TODO Figure out what the extra byte means
+#TODO Figure out what the extra byte means
             file_type, dc_id, media_id, access_hash, _ = struct.unpack("<iiqqb", data)
 
         if not (1 <= dc_id <= 5):
-            # Valid `file_id`'s must have valid DC IDs. Since this method is
-            # called when sending a file and the user may have entered a path
-            # they believe is correct but the file doesn't exist, this method
-            # may detect a path as "valid" bot `file_id` even when it's not.
-            # By checking the `dc_id`, we greatly reduce the chances of this
-            # happening.
+#Valid `file_id`'s must have valid DC IDs. Since this method is
+#called when sending a file and the user may have entered a path
+#they believe is correct but the file doesn't exist, this method
+#may detect a path as "valid" bot `file_id` even when it's not.
+#By checking the `dc_id`, we greatly reduce the chances of this
+#happening.
             return None
 
         attributes = []
         if file_type == 3 or file_type == 9:
-            attributes.append(types.DocumentAttributeAudio(duration=0, voice=file_type == 3))
+            attributes.append(
+                types.DocumentAttributeAudio(duration=0, voice=file_type == 3)
+            )
         elif file_type == 4 or file_type == 13:
             attributes.append(
-                types.DocumentAttributeVideo(duration=0, w=0, h=0, round_message=file_type == 13)
+                types.DocumentAttributeVideo(
+                    duration=0, w=0, h=0, round_message=file_type == 13
+                )
             )
-        # elif file_type == 5:  # other, cannot know which
+#elif file_type == 5 : #other, cannot know which
         elif file_type == 8:
             attributes.append(
-                types.DocumentAttributeSticker(alt="", stickerset=types.InputStickerSetEmpty())
+                types.DocumentAttributeSticker(
+                    alt="", stickerset=types.InputStickerSetEmpty()
+                )
             )
         elif file_type == 10:
             attributes.append(types.DocumentAttributeAnimated())
@@ -1217,19 +1347,19 @@ def resolve_bot_file_id(file_id):
         )
     elif (version == 2 and len(data) == 44) or (version == 4 and len(data) in (49, 77)):
         if version == 2:
-            file_type, dc_id, media_id, access_hash, volume_id, secret, local_id = struct.unpack(
-                "<iiqqqqi", data
+            file_type, dc_id, media_id, access_hash, volume_id, secret, local_id = (
+                struct.unpack("<iiqqqqi", data)
             )
-        # else version == 4:
+#else version == 4:
         elif len(data) == 49:
-            # TODO Figure out what the extra five bytes mean
-            file_type, dc_id, media_id, access_hash, volume_id, secret, local_id, _ = struct.unpack(
-                "<iiqqqqi5s", data
+#TODO Figure out what the extra five bytes mean
+            file_type, dc_id, media_id, access_hash, volume_id, secret, local_id, _ = (
+                struct.unpack("<iiqqqqi5s", data)
             )
         elif len(data) == 77:
-            # See #1613.
-            file_type, dc_id, _, media_id, access_hash, volume_id, _, local_id, _ = struct.unpack(
-                "<ii28sqqq12sib", data
+#See #1613.
+            file_type, dc_id, _, media_id, access_hash, volume_id, _, local_id, _ = (
+                struct.unpack("<ii28sqqq12sib", data)
             )
         else:
             return None
@@ -1237,7 +1367,7 @@ def resolve_bot_file_id(file_id):
         if not (1 <= dc_id <= 5):
             return None
 
-        # Thumbnails (small) always have ID 0; otherwise size 'x'
+#Thumbnails(small) always have ID 0; otherwise size 'x'
         photo_size = "s" if media_id or access_hash else "x"
         return types.Photo(
             id=media_id,
@@ -1280,7 +1410,11 @@ def pack_bot_file_id(file):
             break
 
         return _encode_telegram_base64(
-            _rle_encode(struct.pack("<iiqqb", file_type, file.dc_id, file.id, file.access_hash, 2))
+            _rle_encode(
+                struct.pack(
+                    "<iiqqb", file_type, file.dc_id, file.id, file.access_hash, 2
+                )
+            )
         )
 
     elif isinstance(file, types.Photo):
@@ -1331,11 +1465,11 @@ def resolve_invite_link(link):
     """
     link_hash, is_link = parse_username(link)
     if not is_link:
-        # Perhaps the user passed the link hash directly
+#Perhaps the user passed the link hash directly
         link_hash = link
 
-    # Little known fact, but invite links with a
-    # hex-string of bytes instead of base64 also works.
+#Little known fact, but invite links with a
+#hex - string of bytes instead of base64 also works.
     if re.match(r"[a-fA-F\d]+", link_hash) and len(link_hash) in (24, 32):
         payload = bytes.fromhex(link_hash)
     else:
@@ -1399,14 +1533,14 @@ def encode_waveform(waveform):
             chat = ...
             file = 'my.ogg'
 
-            # Send 'my.ogg' with a ascending-triangle waveform
+#Send 'my.ogg' with a ascending - triangle waveform
             await client.send_file(chat, file, attributes=[types.DocumentAttributeAudio(
                 duration=7,
                 voice=True,
                 waveform=utils.encode_waveform(bytes(range(2 ** 5))  # 2**5 because 5-bit
             )]
 
-            # Send 'my.ogg' with a square waveform
+#Send 'my.ogg' with a square waveform
             await client.send_file(chat, file, attributes=[types.DocumentAttributeAudio(
                 duration=7,
                 voice=True,
@@ -1453,7 +1587,9 @@ def decode_waveform(waveform):
     return bytes(result)
 
 
-def split_text(text, entities, *, limit=4096, max_entities=100, split_at=(r"\n", r"\s", ".")):
+def split_text(
+    text, entities, *, limit=4096, max_entities=100, split_at=(r"\n", r"\s", ".")
+):
     """
     Split a message text and entities into multiple messages, each with their
     own set of entities. This allows sending a very large message as multiple
@@ -1499,8 +1635,9 @@ def split_text(text, entities, *, limit=4096, max_entities=100, split_at=(r"\n",
                 await client.send_message(chat, text, formatting_entities=entities)
     """
 
-    # TODO add test cases (multiple entities beyond cutoff, at cutoff, splitting at emoji)
-    # TODO try to optimize this a bit more? (avoid new_ent, smarter update method)
+#TODO add test cases(multiple entities beyond cutoff, at cutoff,               \
+                     splitting at emoji)
+#TODO try to optimize this a bit more ? (avoid new_ent, smarter update method)
     def update(ent, **updates):
         kwargs = ent.to_dict()
         del kwargs["_"]
@@ -1531,7 +1668,11 @@ def split_text(text, entities, *, limit=4096, max_entities=100, split_at=(r"\n",
                             if ent.offset + ent.length > m.end():
                                 cur_ent.append(update(ent, length=m.end() - ent.offset))
                                 new_ent.append(
-                                    update(ent, offset=0, length=ent.offset + ent.length - m.end())
+                                    update(
+                                        ent,
+                                        offset=0,
+                                        length=ent.offset + ent.length - m.end(),
+                                    )
                                 )
                             else:
                                 cur_ent.append(ent)
@@ -1545,7 +1686,7 @@ def split_text(text, entities, *, limit=4096, max_entities=100, split_at=(r"\n",
                 continue
             break
         else:
-            # Can't find where to split, just return the remaining text and entities
+#Can't find where to split, just return the remaining text and entities
             break
 
     yield del_surrogate(text), entities
@@ -1574,7 +1715,7 @@ def stripped_photo_to_jpg(stripped):
 
     Ported from https://github.com/telegramdesktop/tdesktop/blob/bec39d89e19670eb436dc794a8f20b657cb87c71/Telegram/SourceFiles/ui/image/image.cpp#L225
     """
-    # NOTE: Changes here should update _photo_size_byte_count
+#NOTE : Changes here should update _photo_size_byte_count
     if len(stripped) < 3 or stripped[0] != 1:
         return stripped
 

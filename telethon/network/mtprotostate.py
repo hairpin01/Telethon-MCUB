@@ -120,7 +120,8 @@ class MTProtoState:
             # The `RequestState` stores `bytes(request)`, not the request itself.
             # `invokeAfterMsg` wants a `TLRequest` though, hence the wrapping.
             body = GzipPacked.gzip_if_smaller(
-                content_related, bytes(InvokeAfterMsgRequest(after_id, _OpaqueRequest(data)))
+                content_related,
+                bytes(InvokeAfterMsgRequest(after_id, _OpaqueRequest(data))),
             )
 
         buffer.write(struct.pack("<qii", msg_id, seq_no, len(body)))
@@ -137,7 +138,9 @@ class MTProtoState:
 
         # Being substr(what, offset, length); x = 0 for client
         # "msg_key_large = SHA256(substr(auth_key, 88+x, 32) + pt + padding)"
-        msg_key_large = sha256(self.auth_key.key[88 : 88 + 32] + data + padding).digest()
+        msg_key_large = sha256(
+            self.auth_key.key[88 : 88 + 32] + data + padding
+        ).digest()
 
         # "msg_key = substr (msg_key_large, 8, 16)"
         msg_key = msg_key_large[8:24]
@@ -175,7 +178,9 @@ class MTProtoState:
         reader = BinaryReader(body)
         reader.read_long()  # remote_salt
         if reader.read_long() != self.id:
-            raise SecurityError("Server replied with a wrong session ID (see FAQ for details)")
+            raise SecurityError(
+                "Server replied with a wrong session ID (see FAQ for details)"
+            )
 
         remote_msg_id = reader.read_long()
 
@@ -183,8 +188,13 @@ class MTProtoState:
             raise SecurityError("Server sent an even msg_id")
 
         # Only perform the (somewhat expensive) check of duplicate if we did receive a lower ID
-        if remote_msg_id <= self._highest_remote_id and remote_msg_id in self._recent_remote_ids:
-            self._log.warning("Server resent the older message %d, ignoring", remote_msg_id)
+        if (
+            remote_msg_id <= self._highest_remote_id
+            and remote_msg_id in self._recent_remote_ids
+        ):
+            self._log.warning(
+                "Server resent the older message %d, ignoring", remote_msg_id
+            )
             self._count_ignored()
             return None
 
@@ -202,7 +212,10 @@ class MTProtoState:
         # messages to change server_salt and notifications about invalid time on the client."
         #
         # This means we skip the time check for certain types of messages.
-        if obj.CONSTRUCTOR_ID in (BadServerSalt.CONSTRUCTOR_ID, BadMsgNotification.CONSTRUCTOR_ID):
+        if obj.CONSTRUCTOR_ID in (
+            BadServerSalt.CONSTRUCTOR_ID,
+            BadMsgNotification.CONSTRUCTOR_ID,
+        ):
             if not self._highest_remote_id and not self.time_offset:
                 # If the first message we receive is a bad notification, take this opportunity
                 # to adjust the time offset. Assume it will remain stable afterwards. Updating

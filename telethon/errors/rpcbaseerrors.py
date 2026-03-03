@@ -19,7 +19,9 @@ class RPCError(Exception):
 
     def __init__(self, request, message, code=None):
         super().__init__(
-            "RPCError {}: {}{}".format(code or self.code, message, self._fmt_request(request))
+            "RPCError {}: {}{}".format(
+                code or self.code, message, self._fmt_request(request)
+            )
         )
 
         self.request = request

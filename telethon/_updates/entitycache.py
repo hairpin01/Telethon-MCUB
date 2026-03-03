@@ -5,7 +5,9 @@ _sentinel = object()
 
 
 class EntityCache:
-    def __init__(self, hash_map: dict = _sentinel, self_id: int = None, self_bot: bool = None):
+    def __init__(
+        self, hash_map: dict = _sentinel, self_id: int = None, self_bot: bool = None
+    ):
         self.hash_map = {} if hash_map is _sentinel else hash_map
         self.self_id = self_id
         self.self_bot = self_bot
@@ -35,7 +37,10 @@ class EntityCache:
         cache_updated = False
         for u in users:
             if getattr(u, "access_hash", None) and not u.min:
-                self.hash_map[u.id] = (u.access_hash, EntityType.BOT if u.bot else EntityType.USER)
+                self.hash_map[u.id] = (
+                    u.access_hash,
+                    EntityType.BOT if u.bot else EntityType.USER,
+                )
                 cache_updated = True
 
         for c in chats:

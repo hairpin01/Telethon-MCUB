@@ -161,7 +161,9 @@ class Entity:
         except AttributeError:
             raise TypeError(f"expected str, got {string!r}") from None
         except (TypeError, ValueError):
-            raise ValueError(f"malformed entity str (must be T.id.hash), got {string!r}") from None
+            raise ValueError(
+                f"malformed entity str (must be T.id.hash), got {string!r}"
+            ) from None
 
         return cls(EntityType(ty), id, hash)
 

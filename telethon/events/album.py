@@ -120,7 +120,9 @@ class Album(EventBuilder):
             # TODO time could technically go backwards; time is not monotonic
             now = time.time()
             if len(_IGNORE_DICT) > _IGNORE_MAX_SIZE:
-                for i in [i for i, t in _IGNORE_DICT.items() if now - t > _IGNORE_MAX_AGE]:
+                for i in [
+                    i for i, t in _IGNORE_DICT.items() if now - t > _IGNORE_MAX_AGE
+                ]:
                     del _IGNORE_DICT[i]
 
             # Add the other updates to the ignore list
@@ -134,7 +136,9 @@ class Album(EventBuilder):
                     u.message
                     for u in others
                     if (
-                        isinstance(u, (types.UpdateNewMessage, types.UpdateNewChannelMessage))
+                        isinstance(
+                            u, (types.UpdateNewMessage, types.UpdateNewChannelMessage)
+                        )
                         and isinstance(u.message, types.Message)
                         and u.message.grouped_id == group
                     )
@@ -158,7 +162,9 @@ class Album(EventBuilder):
         def __init__(self, messages):
             message = messages[0]
             super().__init__(
-                chat_peer=message.peer_id, msg_id=message.id, broadcast=bool(message.post)
+                chat_peer=message.peer_id,
+                msg_id=message.id,
+                broadcast=bool(message.post),
             )
             SenderGetter.__init__(self, message.sender_id)
             self.messages = messages

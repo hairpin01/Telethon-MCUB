@@ -55,4 +55,6 @@ def rpc_message_to_error(rpc_error, request):
     # We treat them as if they were positive, so -500 will be treated
     # as a `ServerError`, etc.
     cls = base_errors.get(abs(rpc_error.error_code), RPCError)
-    return cls(request=request, message=rpc_error.error_message, code=rpc_error.error_code)
+    return cls(
+        request=request, message=rpc_error.error_message, code=rpc_error.error_code
+    )

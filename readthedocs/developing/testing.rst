@@ -5,7 +5,7 @@ Tests
 Telethon uses `Pytest <https://pytest.org/>`__, for testing, `Tox
 <https://tox.readthedocs.io/en/latest/>`__ for environment setup, and
 `pytest-asyncio <https://pypi.org/project/pytest-asyncio/>`__ and `pytest-cov
-<https://pytest-cov.readthedocs.io/en/latest/>`__ for asyncio and 
+<https://pytest-cov.readthedocs.io/en/latest/>`__ for asyncio and
 `coverage <https://coverage.readthedocs.io/>`__ integration.
 
 While reading the full documentation for these is probably a good idea, there

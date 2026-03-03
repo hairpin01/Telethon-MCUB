@@ -165,7 +165,9 @@ class MemorySession(Session):
     def get_entity_rows_by_phone(self, phone):
         try:
             return next(
-                (id, hash) for id, hash, _, found_phone, _ in self._entities if found_phone == phone
+                (id, hash)
+                for id, hash, _, found_phone, _ in self._entities
+                if found_phone == phone
             )
         except StopIteration:
             pass
@@ -183,7 +185,9 @@ class MemorySession(Session):
     def get_entity_rows_by_name(self, name):
         try:
             return next(
-                (id, hash) for id, hash, _, _, found_name in self._entities if found_name == name
+                (id, hash)
+                for id, hash, _, _, found_name in self._entities
+                if found_name == name
             )
         except StopIteration:
             pass
@@ -192,7 +196,9 @@ class MemorySession(Session):
         try:
             if exact:
                 return next(
-                    (found_id, hash) for found_id, hash, _, _, _ in self._entities if found_id == id
+                    (found_id, hash)
+                    for found_id, hash, _, _, _ in self._entities
+                    if found_id == id
                 )
             else:
                 ids = (

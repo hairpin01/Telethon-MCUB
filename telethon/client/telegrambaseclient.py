@@ -337,9 +337,13 @@ class TelegramBaseClient(abc.ABC):
 
         if local_addr is not None:
             if not use_ipv6 and ":" in local_addr:
-                raise TypeError("A local IPv6 address must only be used with `use_ipv6=True`.")
+                raise TypeError(
+                    "A local IPv6 address must only be used with `use_ipv6=True`."
+                )
             elif use_ipv6 and ":" not in local_addr:
-                raise TypeError("`use_ipv6=True` must only be used with a local IPv6 address.")
+                raise TypeError(
+                    "`use_ipv6=True` must only be used with a local IPv6 address."
+                )
 
         self._raise_last_call_error = raise_last_call_error
 
@@ -352,7 +356,9 @@ class TelegramBaseClient(abc.ABC):
         self._auto_reconnect = auto_reconnect
 
         if proxy and not python_socks:
-            warnings.warn("proxy argument will be ignored because python-socks is not installed")
+            warnings.warn(
+                "proxy argument will be ignored because python-socks is not installed"
+            )
 
         assert isinstance(connection, type)
         self._connection = connection
@@ -536,7 +542,9 @@ class TelegramBaseClient(abc.ABC):
                     print('Failed to connect')
         """
         if self.session is None:
-            raise ValueError("TelegramClient instance cannot be reused after logging out")
+            raise ValueError(
+                "TelegramClient instance cannot be reused after logging out"
+            )
 
         if self._loop is None:
             self._loop = helpers.get_running_loop()
@@ -637,7 +645,9 @@ class TelegramBaseClient(abc.ABC):
                     )
                 else:
                     self._mb_entity_cache.put(
-                        Entity(EntityType.CHANNEL, entity.channel_id, entity.access_hash)
+                        Entity(
+                            EntityType.CHANNEL, entity.channel_id, entity.access_hash
+                        )
                     )
 
         self._init_request.query = functions.help.GetConfigRequest()
@@ -651,7 +661,9 @@ class TelegramBaseClient(abc.ABC):
         if self._message_box.is_empty():
             me = await self.get_me()
             if me:
-                await self._on_login(me)  # also calls GetState to initialize the MessageBox
+                await self._on_login(
+                    me
+                )  # also calls GetState to initialize the MessageBox
 
         self._updates_handle = self.loop.create_task(self._update_loop())
         self._keepalive_handle = self.loop.create_task(self._keepalive_loop())
@@ -749,7 +761,9 @@ class TelegramBaseClient(abc.ABC):
             await utils.maybe_async(
                 self.session.process_entities(
                     types.contacts.ResolvedPeer(
-                        None, [types.InputPeerUser(0, self._mb_entity_cache.self_id)], []
+                        None,
+                        [types.InputPeerUser(0, self._mb_entity_cache.self_id)],
+                        [],
                     )
                 )
             )
@@ -858,7 +872,9 @@ class TelegramBaseClient(abc.ABC):
             return next(
                 dc
                 for dc in cls._config.dc_options
-                if dc.id == dc_id and bool(dc.ipv6) == self._use_ipv6 and bool(dc.cdn) == cdn
+                if dc.id == dc_id
+                and bool(dc.ipv6) == self._use_ipv6
+                and bool(dc.cdn) == cdn
             )
         except StopIteration:
             self._log[__name__].warning(
@@ -869,7 +885,9 @@ class TelegramBaseClient(abc.ABC):
             )
             try:
                 return next(
-                    dc for dc in cls._config.dc_options if dc.id == dc_id and bool(dc.cdn) == cdn
+                    dc
+                    for dc in cls._config.dc_options
+                    if dc.id == dc_id and bool(dc.cdn) == cdn
                 )
             except StopIteration:
                 raise ValueError(f"Failed to get DC {dc_id} (cdn = {cdn})")
@@ -946,7 +964,9 @@ class TelegramBaseClient(abc.ABC):
         been returned, the sender is cleanly disconnected.
         """
         async with self._borrow_sender_lock:
-            self._log[__name__].debug("Returning borrowed sender for dc_id %d", sender.dc_id)
+            self._log[__name__].debug(
+                "Returning borrowed sender for dc_id %d", sender.dc_id
+            )
             state, _ = self._borrowed_senders[sender.dc_id]
             state.add_return()
 
@@ -957,7 +977,9 @@ class TelegramBaseClient(abc.ABC):
         async with self._borrow_sender_lock:
             for dc_id, (state, sender) in self._borrowed_senders.items():
                 if state.should_disconnect():
-                    self._log[__name__].info("Disconnecting borrowed sender for DC %d", dc_id)
+                    self._log[__name__].info(
+                        "Disconnecting borrowed sender for DC %d", dc_id
+                    )
 
                     # Disconnect should never raise
                     await sender.disconnect()
