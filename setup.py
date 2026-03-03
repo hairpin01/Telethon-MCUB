@@ -209,7 +209,7 @@ def main(argv):
             long_description = f.read()
 
         with open('telethon/version.py', 'r', encoding='utf-8') as f:
-            version = re.search(r"^__version__\s*=\s*'(.*)'.*$",
+            version = re.search(r'^__version__\s*=\s*["\'](.*)["\']',
                                 f.read(), flags=re.MULTILINE).group(1)
         setup(
             name='Telethon',
