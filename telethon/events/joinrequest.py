@@ -86,11 +86,9 @@ class JoinRequest(EventBuilder):
             peer = await self._client.get_input_entity(self.peer)
             user_peer = await self._client.get_input_entity(user)
 
-            return await self._client(HideChatJoinRequestRequest(
-                peer=peer,
-                user_id=user_peer,
-                approved=True
-            ))
+            return await self._client(
+                HideChatJoinRequestRequest(peer=peer, user_id=user_peer, approved=True)
+            )
 
         async def reject(self, blocked=False):
             """
@@ -108,11 +106,9 @@ class JoinRequest(EventBuilder):
             peer = await self._client.get_input_entity(self.peer)
             user_peer = await self._client.get_input_entity(user)
 
-            return await self._client(HideChatJoinRequestRequest(
-                peer=peer,
-                user_id=user_peer,
-                approved=False
-            ))
+            return await self._client(
+                HideChatJoinRequestRequest(peer=peer, user_id=user_peer, approved=False)
+            )
 
         async def approve_all(self):
             """
@@ -122,10 +118,7 @@ class JoinRequest(EventBuilder):
 
             peer = await self._client.get_input_entity(self.peer)
 
-            return await self._client(HideAllChatJoinRequestsRequest(
-                peer=peer,
-                approved=True
-            ))
+            return await self._client(HideAllChatJoinRequestsRequest(peer=peer, approved=True))
 
         async def reject_all(self):
             """
@@ -135,7 +128,4 @@ class JoinRequest(EventBuilder):
 
             peer = await self._client.get_input_entity(self.peer)
 
-            return await self._client(HideAllChatJoinRequestsRequest(
-                peer=peer,
-                approved=False
-            ))
+            return await self._client(HideAllChatJoinRequestsRequest(peer=peer, approved=False))

@@ -1,6 +1,7 @@
 """
 This module contains the BinaryReader utility class.
 """
+
 import struct
 import time
 from datetime import datetime, timedelta, timezone
@@ -12,13 +13,13 @@ from ..tl.core import core_objects
 _EPOCH_NAIVE = datetime(*time.gmtime(0)[:6])
 _EPOCH = _EPOCH_NAIVE.replace(tzinfo=timezone.utc)
 
-_FMT_BYTE = struct.Struct('<B')
-_FMT_INT = struct.Struct('<i')
-_FMT_UINT = struct.Struct('<I')
-_FMT_LONG = struct.Struct('<q')
-_FMT_ULONG = struct.Struct('<Q')
-_FMT_FLOAT = struct.Struct('<f')
-_FMT_DOUBLE = struct.Struct('<d')
+_FMT_BYTE = struct.Struct("<B")
+_FMT_INT = struct.Struct("<i")
+_FMT_UINT = struct.Struct("<I")
+_FMT_LONG = struct.Struct("<q")
+_FMT_ULONG = struct.Struct("<Q")
+_FMT_FLOAT = struct.Struct("<f")
+_FMT_DOUBLE = struct.Struct("<d")
 
 
 class BinaryReader:
@@ -27,7 +28,7 @@ class BinaryReader:
     """
 
     def __init__(self, data):
-        self.stream = data or b''
+        self.stream = data or b""
         self.position = 0
         self._last = None  # Should come in handy to spot -404 errors
 
@@ -69,21 +70,21 @@ class BinaryReader:
 
     def read_large_int(self, bits, signed=True):
         """Reads a n-bits long integer value."""
-        return int.from_bytes(
-            self.read(bits // 8), byteorder='little', signed=signed)
+        return int.from_bytes(self.read(bits // 8), byteorder="little", signed=signed)
 
     def read(self, length=-1):
         """Read the given amount of bytes, or -1 to read all remaining."""
         if length >= 0:
-            result = self.stream[self.position:self.position + length]
+            result = self.stream[self.position : self.position + length]
             self.position += length
         else:
-            result = self.stream[self.position:]
+            result = self.stream[self.position :]
             self.position += len(result)
         if (length >= 0) and (len(result) != length):
             raise BufferError(
-                'No more data left to read (need {}, got {}: {}); last read {}'
-                .format(length, len(result), repr(result), repr(self._last))
+                "No more data left to read (need {}, got {}: {}); last read {}".format(
+                    length, len(result), repr(result), repr(self._last)
+                )
             )
 
         self._last = result
@@ -104,8 +105,7 @@ class BinaryReader:
         """
         first_byte = self.read_byte()
         if first_byte == 254:
-            length = self.read_byte() | (self.read_byte() << 8) | (
-                self.read_byte() << 16)
+            length = self.read_byte() | (self.read_byte() << 8) | (self.read_byte() << 16)
             padding = length % 4
         else:
             length = first_byte
@@ -120,21 +120,21 @@ class BinaryReader:
 
     def tgread_string(self):
         """Reads a Telegram-encoded string."""
-        return str(self.tgread_bytes(), encoding='utf-8', errors='replace')
+        return str(self.tgread_bytes(), encoding="utf-8", errors="replace")
 
     def tgread_bool(self):
         """Reads a Telegram boolean value."""
         value = self.read_int(signed=False)
-        if value == 0x997275b5:  # boolTrue
+        if value == 0x997275B5:  # boolTrue
             return True
-        elif value == 0xbc799737:  # boolFalse
+        elif value == 0xBC799737:  # boolFalse
             return False
         else:
-            raise RuntimeError('Invalid boolean code {}'.format(hex(value)))
+            raise RuntimeError("Invalid boolean code {}".format(hex(value)))
 
     def tgread_date(self):
         """Reads and converts Unix time (used by Telegram)
-           into a Python datetime object.
+        into a Python datetime object.
         """
         value = self.read_int()
         return _EPOCH + timedelta(seconds=value)
@@ -147,11 +147,11 @@ class BinaryReader:
             # The class was None, but there's still a
             # chance of it being a manually parsed value like bool!
             value = constructor_id
-            if value == 0x997275b5:  # boolTrue
+            if value == 0x997275B5:  # boolTrue
                 return True
-            elif value == 0xbc799737:  # boolFalse
+            elif value == 0xBC799737:  # boolFalse
                 return False
-            elif value == 0x1cb5c415:  # Vector
+            elif value == 0x1CB5C415:  # Vector
                 return [self.tgread_object() for _ in range(self.read_int())]
 
             clazz = core_objects.get(constructor_id, None)
@@ -167,8 +167,8 @@ class BinaryReader:
 
     def tgread_vector(self):
         """Reads a vector (a list) of Telegram objects."""
-        if 0x1cb5c415 != self.read_int(signed=False):
-            raise RuntimeError('Invalid constructor code, vector was expected')
+        if 0x1CB5C415 != self.read_int(signed=False):
+            raise RuntimeError("Invalid constructor code, vector was expected")
 
         count = self.read_int()
         return [self.tgread_object() for _ in range(count)]
@@ -177,7 +177,7 @@ class BinaryReader:
 
     def close(self):
         """Closes the reader, freeing the BytesIO stream."""
-        self.stream = b''
+        self.stream = b""
 
     # region Position related
 

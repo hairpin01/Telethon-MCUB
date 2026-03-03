@@ -14,7 +14,7 @@ class ReactionMethods:
         message: typing.Union[int, "types.Message"],
         reaction: typing.Union[str, typing.List[str]] = "👍",
         big: bool = False,
-        add_to_recent: bool = True
+        add_to_recent: bool = True,
     ):
         """
         Send a reaction to a message.
@@ -34,7 +34,7 @@ class ReactionMethods:
             >>> await client.send_reaction(chat, message, ["👍", "❤️"])
         """
         peer = await self.get_input_entity(entity)
-        msg_id = message.id if hasattr(message, 'id') else message
+        msg_id = message.id if hasattr(message, "id") else message
 
         reactions = []
         if isinstance(reaction, str):
@@ -43,20 +43,18 @@ class ReactionMethods:
             for r in reaction:
                 reactions.append(types.ReactionEmoji(emoticon=r))
 
-        return await self(functions.messages.SendReactionRequest(
-            peer=peer,
-            msg_id=msg_id,
-            big=big,
-            add_to_recent=add_to_recent,
-            reaction=reactions
-        ))
+        return await self(
+            functions.messages.SendReactionRequest(
+                peer=peer, msg_id=msg_id, big=big, add_to_recent=add_to_recent, reaction=reactions
+            )
+        )
 
     async def get_message_reactions_list(
         self: "TelegramClient",
         entity: "hints.EntityLike",
         message: typing.Union[int, "types.Message"],
         reaction: typing.Optional[str] = None,
-        limit: int = 100
+        limit: int = 100,
     ):
         """
         Get the list of users who reacted to a message.
@@ -71,23 +69,19 @@ class ReactionMethods:
             MessageReactionsList with users and reactions.
         """
         peer = await self.get_input_entity(entity)
-        msg_id = message.id if hasattr(message, 'id') else message
+        msg_id = message.id if hasattr(message, "id") else message
 
         reaction_obj = None
         if reaction:
             reaction_obj = types.ReactionEmoji(emoticon=reaction)
 
-        return await self(functions.messages.GetMessageReactionsListRequest(
-            peer=peer,
-            id=msg_id,
-            reaction=reaction_obj,
-            limit=limit
-        ))
+        return await self(
+            functions.messages.GetMessageReactionsListRequest(
+                peer=peer, id=msg_id, reaction=reaction_obj, limit=limit
+            )
+        )
 
-    async def set_default_reaction(
-        self: "TelegramClient",
-        reaction: str = "👍"
-    ):
+    async def set_default_reaction(self: "TelegramClient", reaction: str = "👍"):
         """
         Set the default reaction for new messages.
 
@@ -95,16 +89,14 @@ class ReactionMethods:
             reaction: Emoji reaction.
         """
         reaction_obj = types.ReactionEmoji(emoticon=reaction)
-        return await self(functions.messages.SetDefaultReactionRequest(
-            reaction=reaction_obj
-        ))
+        return await self(functions.messages.SetDefaultReactionRequest(reaction=reaction_obj))
 
     async def set_chat_available_reactions(
         self: "TelegramClient",
         entity: "hints.EntityLike",
         reactions: typing.List[str],
         reactions_limit: typing.Optional[int] = None,
-        paid_enabled: typing.Optional[bool] = None
+        paid_enabled: typing.Optional[bool] = None,
     ):
         """
         Set available reactions for a chat/channel.
@@ -123,23 +115,25 @@ class ReactionMethods:
 
         chat_reactions = types.ChatReactionsSome(reactions=reaction_objects)
 
-        return await self(functions.messages.SetChatAvailableReactionsRequest(
-            peer=peer,
-            available_reactions=chat_reactions,
-            reactions_limit=reactions_limit,
-            paid_enabled=paid_enabled
-        ))
+        return await self(
+            functions.messages.SetChatAvailableReactionsRequest(
+                peer=peer,
+                available_reactions=chat_reactions,
+                reactions_limit=reactions_limit,
+                paid_enabled=paid_enabled,
+            )
+        )
 
     async def send_photo_as_private(
         self: "TelegramClient",
         entity: "hints.EntityLike",
         photo: typing.Union[str, bytes, "types.InputPhoto"],
         caption: typing.Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         """
         Send a photo as a private message to the user.
-        
+
         This sends the photo directly to the user's private chat (saved messages).
 
         Args:
@@ -151,9 +145,4 @@ class ReactionMethods:
         Returns:
             The sent message.
         """
-        return await self.send_file(
-            entity,
-            photo,
-            caption=caption,
-            **kwargs
-        )
+        return await self.send_file(entity, photo, caption=caption, **kwargs)

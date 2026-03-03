@@ -32,6 +32,7 @@ class AlbumHack:
     to do this, or just leave the album problem to the users; the update
     handling code is bad enough as it is.
     """
+
     def __init__(self, client, event):
         # It's probably silly to use a weakref here because this object is
         # very short-lived but might as well try to do "the right thing".
@@ -91,8 +92,7 @@ class Album(EventBuilder):
                 await event.messages[4].reply('Cool!')
     """
 
-    def __init__(
-            self, chats=None, *, blacklist_chats=False, func=None):
+    def __init__(self, chats=None, *, blacklist_chats=False, func=None):
         super().__init__(chats, blacklist_chats=blacklist_chats, func=func)
 
     @classmethod
@@ -102,8 +102,7 @@ class Album(EventBuilder):
         # In essence we always rely on AlbumHack rather than returning early if not others.
         others = [update]
 
-        if isinstance(update,
-                      (types.UpdateNewMessage, types.UpdateNewChannelMessage)):
+        if isinstance(update, (types.UpdateNewMessage, types.UpdateNewChannelMessage)):
             if not isinstance(update.message, types.Message):
                 return  # We don't care about MessageService's here
 
@@ -130,12 +129,17 @@ class Album(EventBuilder):
                     _IGNORE_DICT[id(u)] = now
 
             # Figure out which updates share the same group and use those
-            return cls.Event([
-                u.message for u in others
-                if (isinstance(u, (types.UpdateNewMessage, types.UpdateNewChannelMessage))
-                    and isinstance(u.message, types.Message)
-                    and u.message.grouped_id == group)
-            ])
+            return cls.Event(
+                [
+                    u.message
+                    for u in others
+                    if (
+                        isinstance(u, (types.UpdateNewMessage, types.UpdateNewChannelMessage))
+                        and isinstance(u.message, types.Message)
+                        and u.message.grouped_id == group
+                    )
+                ]
+            )
 
     def filter(self, event):
         # Albums with less than two messages require a few hacks to work.
@@ -150,17 +154,20 @@ class Album(EventBuilder):
             messages (Sequence[`Message <telethon.tl.custom.message.Message>`]):
                 The list of messages belonging to the same album.
         """
+
         def __init__(self, messages):
             message = messages[0]
-            super().__init__(chat_peer=message.peer_id,
-                             msg_id=message.id, broadcast=bool(message.post))
+            super().__init__(
+                chat_peer=message.peer_id, msg_id=message.id, broadcast=bool(message.post)
+            )
             SenderGetter.__init__(self, message.sender_id)
             self.messages = messages
 
         def _set_client(self, client):
             super()._set_client(client)
             self._sender, self._input_sender = utils._get_entity_pair(
-                self.sender_id, self._entities, client._mb_entity_cache)
+                self.sender_id, self._entities, client._mb_entity_cache
+            )
 
             for msg in self.messages:
                 msg._finish_init(client, self._entities, None)
@@ -186,7 +193,7 @@ class Album(EventBuilder):
             The message text of the first photo with a caption,
             formatted using the client's default parse mode.
             """
-            return next((m.text for m in self.messages if m.text), '')
+            return next((m.text for m in self.messages if m.text), "")
 
         @property
         def raw_text(self):
@@ -194,7 +201,7 @@ class Album(EventBuilder):
             The raw message text of the first photo
             with a caption, ignoring any formatting.
             """
-            return next((m.raw_text for m in self.messages if m.raw_text), '')
+            return next((m.raw_text for m in self.messages if m.raw_text), "")
 
         @property
         def is_reply(self):
@@ -253,8 +260,8 @@ class Album(EventBuilder):
             with both ``messages`` and ``from_peer`` already set.
             """
             if self._client:
-                kwargs['messages'] = self.messages
-                kwargs['from_peer'] = await self.get_input_chat()
+                kwargs["messages"] = self.messages
+                kwargs["from_peer"] = await self.get_input_chat()
                 return await self._client.forward_messages(*args, **kwargs)
 
         async def edit(self, *args, **kwargs):
@@ -295,8 +302,7 @@ class Album(EventBuilder):
             """
             if self._client:
                 return await self._client.delete_messages(
-                    await self.get_input_chat(), self.messages,
-                    *args, **kwargs
+                    await self.get_input_chat(), self.messages, *args, **kwargs
                 )
 
         async def mark_read(self):
@@ -308,7 +314,8 @@ class Album(EventBuilder):
             """
             if self._client:
                 await self._client.send_read_acknowledge(
-                    await self.get_input_chat(), max_id=self.messages[-1].id)
+                    await self.get_input_chat(), max_id=self.messages[-1].id
+                )
 
         async def pin(self, *, notify=False):
             """

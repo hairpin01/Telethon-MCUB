@@ -29,8 +29,8 @@ class MessageRead(EventBuilder):
                 # Log when you read message in a chat (from your "inbox")
                 print('You have read messages until', event.max_id)
     """
-    def __init__(
-            self, chats=None, *, blacklist_chats=False, func=None, inbox=False):
+
+    def __init__(self, chats=None, *, blacklist_chats=False, func=None, inbox=False):
         super().__init__(chats, blacklist_chats=blacklist_chats, func=func)
         self.inbox = inbox
 
@@ -41,18 +41,15 @@ class MessageRead(EventBuilder):
         elif isinstance(update, types.UpdateReadHistoryOutbox):
             return cls.Event(update.peer, update.max_id, True)
         elif isinstance(update, types.UpdateReadChannelInbox):
-            return cls.Event(types.PeerChannel(update.channel_id),
-                             update.max_id, False)
+            return cls.Event(types.PeerChannel(update.channel_id), update.max_id, False)
         elif isinstance(update, types.UpdateReadChannelOutbox):
-            return cls.Event(types.PeerChannel(update.channel_id),
-                             update.max_id, True)
+            return cls.Event(types.PeerChannel(update.channel_id), update.max_id, True)
         elif isinstance(update, types.UpdateReadMessagesContents):
-            return cls.Event(message_ids=update.messages,
-                             contents=True)
+            return cls.Event(message_ids=update.messages, contents=True)
         elif isinstance(update, types.UpdateChannelReadMessagesContents):
-            return cls.Event(types.PeerChannel(update.channel_id),
-                             message_ids=update.messages,
-                             contents=True)
+            return cls.Event(
+                types.PeerChannel(update.channel_id), message_ids=update.messages, contents=True
+            )
 
     def filter(self, event):
         if self.inbox == event.outbox:
@@ -77,8 +74,8 @@ class MessageRead(EventBuilder):
                 This will be the case when e.g. you play a voice note.
                 It may only be set on ``inbox`` events.
         """
-        def __init__(self, peer=None, max_id=None, out=False, contents=False,
-                     message_ids=None):
+
+        def __init__(self, peer=None, max_id=None, out=False, contents=False, message_ids=None):
             self.outbox = out
             self.contents = contents
             self._message_ids = message_ids or []
@@ -116,8 +113,7 @@ class MessageRead(EventBuilder):
                 if not chat:
                     self._messages = []
                 else:
-                    self._messages = await self._client.get_messages(
-                        chat, ids=self._message_ids)
+                    self._messages = await self._client.get_messages(chat, ids=self._message_ids)
 
             return self._messages
 
@@ -129,11 +125,9 @@ class MessageRead(EventBuilder):
             list of booleans indicating which messages have been read.
             """
             if utils.is_list_like(message):
-                return [(m if isinstance(m, int) else m.id) <= self.max_id
-                        for m in message]
+                return [(m if isinstance(m, int) else m.id) <= self.max_id for m in message]
             else:
-                return (message if isinstance(message, int)
-                        else message.id) <= self.max_id
+                return (message if isinstance(message, int) else message.id) <= self.max_id
 
         def __contains__(self, message):
             """`True` if the message(s) are read message."""

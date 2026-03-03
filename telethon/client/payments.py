@@ -18,30 +18,26 @@ class GiftMethods:
         if saved_gift_match:
             return types.InputSavedStarGiftChat(
                 peer=await self.get_input_entity(int(saved_gift_match.group(1))),
-                saved_id=int(saved_gift_match.group(2))
+                saved_id=int(saved_gift_match.group(2)),
             )
         elif slug_match:
-            return types.InputSavedStarGiftSlug(
-                slug=slug_match.group(1)
-            )
+            return types.InputSavedStarGiftSlug(slug=slug_match.group(1))
         else:
-            return types.InputSavedStarGiftUser(
-                msg_id=int(owned_gift_id)
-            )
+            return types.InputSavedStarGiftUser(msg_id=int(owned_gift_id))
 
     async def get_saved_gifts(
-            self,
-            peer: 'hints.EntityLike',
-            collection_id: int = None,
-            exclude_unsaved: bool = None,
-            exclude_saved: bool = None,
-            exclude_unlimited: bool = None,
-            exclude_upgradable: bool = None,
-            exclude_unupgradable: bool = None,
-            exclude_nft: bool = None,
-            sort_by_price: bool = None,
-            limit: int = 0,
-            offset: str = "",
+        self,
+        peer: "hints.EntityLike",
+        collection_id: int = None,
+        exclude_unsaved: bool = None,
+        exclude_saved: bool = None,
+        exclude_unlimited: bool = None,
+        exclude_upgradable: bool = None,
+        exclude_unupgradable: bool = None,
+        exclude_nft: bool = None,
+        sort_by_price: bool = None,
+        limit: int = 0,
+        offset: str = "",
     ) -> 'typing.AsyncGenerator["custom.StarGift", None]':
 
         current = 0
@@ -61,15 +57,12 @@ class GiftMethods:
                     exclude_upgradable=exclude_upgradable,
                     exclude_unupgradable=exclude_unupgradable,
                     sort_by_value=sort_by_price,
-                    collection_id=collection_id
+                    collection_id=collection_id,
                 ),
-                flood_sleep_threshold=60
+                flood_sleep_threshold=60,
             )
 
-            gifts = [
-                custom.StarGift._parse(self, gift)
-                for gift in r.gifts
-            ]
+            gifts = [custom.StarGift._parse(self, gift) for gift in r.gifts]
 
             if not gifts:
                 return
@@ -88,31 +81,25 @@ class GiftMethods:
                 return
 
     async def upgrade_gift(
-            self,
-            owned_gift_id: str,
-            keep_original_details: bool = None,
-            star_count: int = None,
-    ) -> 'types.payments.PaymentResult':
+        self,
+        owned_gift_id: str,
+        keep_original_details: bool = None,
+        star_count: int = None,
+    ) -> "types.payments.PaymentResult":
         stargift = await self._get_input_stargift(owned_gift_id)
 
         try:
             r = await self(
                 functions.payments.UpgradeStarGiftRequest(
-                    stargift=stargift,
-                    keep_original_details=keep_original_details
+                    stargift=stargift, keep_original_details=keep_original_details
                 )
             )
         except errors.PaymentRequiredError:
             invoice = types.InputInvoiceStarGiftUpgrade(
-                stargift=stargift,
-                keep_original_details=keep_original_details
+                stargift=stargift, keep_original_details=keep_original_details
             )
 
-            form = await self(
-                functions.payments.GetPaymentFormRequest(
-                    invoice=invoice
-                )
-            )
+            form = await self(functions.payments.GetPaymentFormRequest(invoice=invoice))
 
             if star_count is not None:
                 if star_count < 0:
@@ -122,10 +109,7 @@ class GiftMethods:
                     raise ValueError("Have not enough Telegram Stars.")
 
             r = await self(
-                functions.payments.SendStarsFormRequest(
-                    form_id=form.form_id,
-                    invoice=invoice
-                )
+                functions.payments.SendStarsFormRequest(form_id=form.form_id, invoice=invoice)
             )
 
         return r

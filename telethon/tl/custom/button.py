@@ -37,8 +37,8 @@ class Button:
     to 128 characters and add the ellipsis (…) character as
     the 129.
     """
-    def __init__(self, button, *, resize, single_use, selective,
-                 persistent, placeholder):
+
+    def __init__(self, button, *, resize, single_use, selective, persistent, placeholder):
         self.button = button
         self.resize = resize
         self.single_use = single_use
@@ -51,16 +51,19 @@ class Button:
         """
         Returns `True` if the button belongs to an inline keyboard.
         """
-        return isinstance(button, (
-            types.KeyboardButtonCopy,
-            types.KeyboardButtonBuy,
-            types.KeyboardButtonCallback,
-            types.KeyboardButtonGame,
-            types.KeyboardButtonSwitchInline,
-            types.KeyboardButtonUrl,
-            types.InputKeyboardButtonUrlAuth,
-            types.KeyboardButtonWebView,
-        ))
+        return isinstance(
+            button,
+            (
+                types.KeyboardButtonCopy,
+                types.KeyboardButtonBuy,
+                types.KeyboardButtonCallback,
+                types.KeyboardButtonGame,
+                types.KeyboardButtonSwitchInline,
+                types.KeyboardButtonUrl,
+                types.InputKeyboardButtonUrlAuth,
+                types.KeyboardButtonWebView,
+            ),
+        )
 
     @staticmethod
     def inline(text, data=None):
@@ -81,17 +84,17 @@ class Button:
         button was pressed.
         """
         if not data:
-            data = text.encode('utf-8')
+            data = text.encode("utf-8")
         elif not isinstance(data, (bytes, bytearray, memoryview)):
-            data = str(data).encode('utf-8')
+            data = str(data).encode("utf-8")
 
         if len(data) > 64:
-            raise ValueError('Too many bytes for the data')
+            raise ValueError("Too many bytes for the data")
 
         return types.KeyboardButtonCallback(text, data)
 
     @staticmethod
-    def switch_inline(text, query='', same_peer=False):
+    def switch_inline(text, query="", same_peer=False):
         """
         Creates a new inline button to switch to inline query.
 
@@ -167,12 +170,20 @@ class Button:
             url=url or text,
             bot=utils.get_input_user(bot or types.InputUserSelf()),
             request_write_access=write_access,
-            fwd_text=fwd_text
+            fwd_text=fwd_text,
         )
 
     @classmethod
-    def text(cls, text, *, resize=None, single_use=None, selective=None,
-             persistent=None, placeholder=None):
+    def text(
+        cls,
+        text,
+        *,
+        resize=None,
+        single_use=None,
+        selective=None,
+        persistent=None,
+        placeholder=None,
+    ):
         """
         Creates a new keyboard button with the given text.
 
@@ -215,12 +226,20 @@ class Button:
             single_use=single_use,
             selective=selective,
             persistent=persistent,
-            placeholder=placeholder
+            placeholder=placeholder,
         )
 
     @classmethod
-    def request_location(cls, text, *, resize=None, single_use=None, selective=None,
-                         persistent=None, placeholder=None):
+    def request_location(
+        cls,
+        text,
+        *,
+        resize=None,
+        single_use=None,
+        selective=None,
+        persistent=None,
+        placeholder=None,
+    ):
         """
         Creates a new keyboard button to request the user's location on click.
 
@@ -237,12 +256,20 @@ class Button:
             single_use=single_use,
             selective=selective,
             persistent=persistent,
-            placeholder=placeholder
+            placeholder=placeholder,
         )
 
     @classmethod
-    def request_phone(cls, text, *, resize=None, single_use=None,
-                      selective=None, persistent=None, placeholder=None):
+    def request_phone(
+        cls,
+        text,
+        *,
+        resize=None,
+        single_use=None,
+        selective=None,
+        persistent=None,
+        placeholder=None,
+    ):
         """
         Creates a new keyboard button to request the user's phone on click.
 
@@ -259,12 +286,21 @@ class Button:
             single_use=single_use,
             selective=selective,
             placeholder=placeholder,
-            persistent=persistent
+            persistent=persistent,
         )
 
     @classmethod
-    def request_poll(cls, text, *, force_quiz=False, resize=None, single_use=None,
-                     selective=None, persistent=None, placeholder=None):
+    def request_poll(
+        cls,
+        text,
+        *,
+        force_quiz=False,
+        resize=None,
+        single_use=None,
+        selective=None,
+        persistent=None,
+        placeholder=None,
+    ):
         """
         Creates a new keyboard button to request the user to create a poll.
 
@@ -288,16 +324,16 @@ class Button:
             single_use=single_use,
             selective=selective,
             persistent=persistent,
-            placeholder=placeholder
+            placeholder=placeholder,
         )
 
     @staticmethod
     def clear(selective=None):
         """
-        Clears all keyboard buttons after sending a message with this markup.
-        When used, no other button should be present or it will be ignored.
+         Clears all keyboard buttons after sending a message with this markup.
+         When used, no other button should be present or it will be ignored.
 
-       ``selective`` is as documented in `text`.
+        ``selective`` is as documented in `text`.
 
         """
         return types.ReplyKeyboardHide(selective=selective)
@@ -312,9 +348,8 @@ class Button:
 
         """
         return types.ReplyKeyboardForceReply(
-            single_use=single_use,
-            selective=selective,
-            placeholder=placeholder)
+            single_use=single_use, selective=selective, placeholder=placeholder
+        )
 
     @staticmethod
     def buy(text):

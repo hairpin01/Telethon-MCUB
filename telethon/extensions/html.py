@@ -1,6 +1,7 @@
 """
 Simple HTML -> Telegram entity parser.
 """
+
 import functools
 from collections import deque
 from html import escape
@@ -10,37 +11,46 @@ from typing import Iterable, Tuple, List
 from ..helpers import add_surrogate, del_surrogate, within_surrogate, strip_text
 from ..tl import TLObject
 from ..tl.types import (
-    MessageEntityBold, MessageEntityItalic, MessageEntityCode,
-    MessageEntityPre, MessageEntityEmail, MessageEntityUrl,
-    MessageEntityTextUrl, MessageEntityMentionName,
-    MessageEntityUnderline, MessageEntityStrike, MessageEntityBlockquote,
-    MessageEntityCustomEmoji, MessageEntitySpoiler, TypeMessageEntity
+    MessageEntityBold,
+    MessageEntityItalic,
+    MessageEntityCode,
+    MessageEntityPre,
+    MessageEntityEmail,
+    MessageEntityUrl,
+    MessageEntityTextUrl,
+    MessageEntityMentionName,
+    MessageEntityUnderline,
+    MessageEntityStrike,
+    MessageEntityBlockquote,
+    MessageEntityCustomEmoji,
+    MessageEntitySpoiler,
+    TypeMessageEntity,
 )
 
 _TAG_TO_ENTITY = {
-    'strong': MessageEntityBold,
-    'b': MessageEntityBold,
-    'em': MessageEntityItalic,
-    'i': MessageEntityItalic,
-    'u': MessageEntityUnderline,
-    'del': MessageEntityStrike,
-    's': MessageEntityStrike,
-    'blockquote': MessageEntityBlockquote,
-    'code': MessageEntityCode,
-    'pre': MessageEntityPre,
-    'tg-emoji': MessageEntityCustomEmoji,
-    'tg-spoiler': MessageEntitySpoiler,
+    "strong": MessageEntityBold,
+    "b": MessageEntityBold,
+    "em": MessageEntityItalic,
+    "i": MessageEntityItalic,
+    "u": MessageEntityUnderline,
+    "del": MessageEntityStrike,
+    "s": MessageEntityStrike,
+    "blockquote": MessageEntityBlockquote,
+    "code": MessageEntityCode,
+    "pre": MessageEntityPre,
+    "tg-emoji": MessageEntityCustomEmoji,
+    "tg-spoiler": MessageEntitySpoiler,
 }
 
-_MAILTO_LEN = len('mailto:')
+_MAILTO_LEN = len("mailto:")
 
 
 class HTMLToTelegramParser(HTMLParser):
-    __slots__ = ('text', 'entities', '_building_entities', '_open_tags', '_open_tags_meta')
+    __slots__ = ("text", "entities", "_building_entities", "_open_tags", "_open_tags_meta")
 
     def __init__(self):
         super().__init__()
-        self.text = ''
+        self.text = ""
         self.entities = []
         self._building_entities = {}
         self._open_tags = deque()
@@ -54,15 +64,15 @@ class HTMLToTelegramParser(HTMLParser):
         EntityType = _TAG_TO_ENTITY.get(tag)
         args = {}
 
-        has_expandable = any(k == 'expandable' for k, v in attrs)
+        has_expandable = any(k == "expandable" for k, v in attrs)
 
-        if tag == 'pre':
-            args['language'] = ''
-        elif tag == 'a':
-            url = attrs_dict.get('href')
+        if tag == "pre":
+            args["language"] = ""
+        elif tag == "a":
+            url = attrs_dict.get("href")
             if url is None:
                 return
-            if url.startswith('mailto:'):
+            if url.startswith("mailto:"):
                 url = url[_MAILTO_LEN:]
                 EntityType = MessageEntityEmail
             else:
@@ -70,48 +80,45 @@ class HTMLToTelegramParser(HTMLParser):
                     EntityType = MessageEntityUrl
                 else:
                     EntityType = MessageEntityTextUrl
-                    args['url'] = del_surrogate(url)
+                    args["url"] = del_surrogate(url)
                     url = None
             self._open_tags_meta.popleft()
             self._open_tags_meta.appendleft(url)
-        elif tag == 'tg-emoji':
-            emoji_id = attrs_dict.get('emoji-id')
+        elif tag == "tg-emoji":
+            emoji_id = attrs_dict.get("emoji-id")
             if emoji_id is None:
                 return
             try:
-                args['document_id'] = int(emoji_id)
+                args["document_id"] = int(emoji_id)
             except ValueError:
                 return
-        elif tag == 'emoji':
-            document_id = attrs_dict.get('document_id')
+        elif tag == "emoji":
+            document_id = attrs_dict.get("document_id")
             if document_id is None:
                 return
             try:
-                args['document_id'] = int(document_id)
+                args["document_id"] = int(document_id)
             except ValueError:
                 return
             EntityType = MessageEntityCustomEmoji
-        elif tag == 'blockquote':
+        elif tag == "blockquote":
             if has_expandable:
-                expandable_value = attrs_dict.get('expandable')
-                if expandable_value in ('', None, 'true'):
-                    args['collapsed'] = False
+                expandable_value = attrs_dict.get("expandable")
+                if expandable_value in ("", None, "true"):
+                    args["collapsed"] = False
                 else:
-                    args['collapsed'] = True
+                    args["collapsed"] = True
             else:
-                args['collapsed'] = None
-        elif tag == 'code' and 'pre' in self._building_entities:
-            pre = self._building_entities['pre']
-            cls = attrs_dict.get('class', '')
-            if cls.startswith('language-'):
+                args["collapsed"] = None
+        elif tag == "code" and "pre" in self._building_entities:
+            pre = self._building_entities["pre"]
+            cls = attrs_dict.get("class", "")
+            if cls.startswith("language-"):
                 pre.language = cls[9:]
             EntityType = None
 
         if EntityType and tag not in self._building_entities:
-            self._building_entities[tag] = EntityType(
-                offset=len(self.text),
-                length=0,
-                **args)
+            self._building_entities[tag] = EntityType(offset=len(self.text), length=0, **args)
 
     def handle_data(self, text):
         for tag, entity in self._building_entities.items():
@@ -160,35 +167,37 @@ def parse(html: str) -> Tuple[str, List[TypeMessageEntity]]:
 def _make_blockquote_formatter():
     def formatter(e, _text):
         if e.collapsed is False:
-            return '<blockquote expandable>', '</blockquote>'
+            return "<blockquote expandable>", "</blockquote>"
         elif e.collapsed is True:
-            return '<blockquote expandable="false">', '</blockquote>'
+            return '<blockquote expandable="false">', "</blockquote>"
         else:
-            return '<blockquote>', '</blockquote>'
+            return "<blockquote>", "</blockquote>"
+
     return formatter
+
 
 _blockquote_formatter = _make_blockquote_formatter()
 
 ENTITY_TO_FORMATTER = {
-    MessageEntityBold: ('<strong>', '</strong>'),
-    MessageEntityItalic: ('<em>', '</em>'),
-    MessageEntityCode: ('<code>', '</code>'),
-    MessageEntityUnderline: ('<u>', '</u>'),
-    MessageEntityStrike: ('<del>', '</del>'),
-    MessageEntitySpoiler: ('<tg-spoiler>', '</tg-spoiler>'),
+    MessageEntityBold: ("<strong>", "</strong>"),
+    MessageEntityItalic: ("<em>", "</em>"),
+    MessageEntityCode: ("<code>", "</code>"),
+    MessageEntityUnderline: ("<u>", "</u>"),
+    MessageEntityStrike: ("<del>", "</del>"),
+    MessageEntitySpoiler: ("<tg-spoiler>", "</tg-spoiler>"),
     MessageEntityBlockquote: _blockquote_formatter,
     MessageEntityPre: lambda e, _: (
-        "<pre>\n"
-        "    <code class='language-{}'>\n"
-        "        ".format(e.language), "{}\n"
-        "    </code>\n"
-        "</pre>"
+        "<pre>\n" "    <code class='language-{}'>\n" "        ".format(e.language),
+        "{}\n" "    </code>\n" "</pre>",
     ),
-    MessageEntityEmail: lambda _, t: ('<a href="mailto:{}">'.format(escape(t)), '</a>'),
-    MessageEntityUrl: lambda _, t: ('<a href="{}">'.format(escape(del_surrogate(t))), '</a>'),
-    MessageEntityTextUrl: lambda e, _: ('<a href="{}">'.format(escape(e.url)), '</a>'),
-    MessageEntityMentionName: lambda e, _: ('<a href="tg://user?id={}">'.format(e.user_id), '</a>'),
-    MessageEntityCustomEmoji: lambda e, _: ('<tg-emoji emoji-id="{}">'.format(e.document_id), '</tg-emoji>'),
+    MessageEntityEmail: lambda _, t: ('<a href="mailto:{}">'.format(escape(t)), "</a>"),
+    MessageEntityUrl: lambda _, t: ('<a href="{}">'.format(escape(del_surrogate(t))), "</a>"),
+    MessageEntityTextUrl: lambda e, _: ('<a href="{}">'.format(escape(e.url)), "</a>"),
+    MessageEntityMentionName: lambda e, _: ('<a href="tg://user?id={}">'.format(e.user_id), "</a>"),
+    MessageEntityCustomEmoji: lambda e, _: (
+        '<tg-emoji emoji-id="{}">'.format(e.document_id),
+        "</tg-emoji>",
+    ),
 }
 
 
@@ -234,7 +243,12 @@ def unparse(text: str, entities: Iterable[TypeMessageEntity]) -> str:
             at += 1
 
         if isinstance(what, _TagWrapper):
-            text = text[:at] + what.text + escape(text[at:next_escape_bound]) + text[next_escape_bound:]
+            text = (
+                text[:at]
+                + what.text
+                + escape(text[at:next_escape_bound])
+                + text[next_escape_bound:]
+            )
         else:
             text = text[:at] + what + escape(text[at:next_escape_bound]) + text[next_escape_bound:]
         next_escape_bound = at

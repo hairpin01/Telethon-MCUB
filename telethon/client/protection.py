@@ -23,12 +23,14 @@ DANGEROUS_REQUESTS = (
     FinishTakeoutSessionRequest,
 )
 
-DANGEROUS_REQUEST_IDS = frozenset({
-    DeleteAccountRequest.CONSTRUCTOR_ID,
-    ResetAuthorizationRequest.CONSTRUCTOR_ID,
-    ResetPasswordRequest.CONSTRUCTOR_ID,
-    ChangePhoneRequest.CONSTRUCTOR_ID,
-    UpdatePasswordSettingsRequest.CONSTRUCTOR_ID,
-    ResetWebAuthorizationsRequest.CONSTRUCTOR_ID,
-    FinishTakeoutSessionRequest.CONSTRUCTOR_ID,
-})
+DANGEROUS_REQUEST_IDS = frozenset(
+    {
+        DeleteAccountRequest.CONSTRUCTOR_ID,
+        ResetAuthorizationRequest.CONSTRUCTOR_ID,
+        ResetPasswordRequest.CONSTRUCTOR_ID,
+        ChangePhoneRequest.CONSTRUCTOR_ID,
+        UpdatePasswordSettingsRequest.CONSTRUCTOR_ID,
+        ResetWebAuthorizationsRequest.CONSTRUCTOR_ID,
+        FinishTakeoutSessionRequest.CONSTRUCTOR_ID,
+    }
+)

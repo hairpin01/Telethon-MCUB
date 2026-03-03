@@ -11,19 +11,43 @@ if cryptg is None:
         "cryptg is not installed. For faster encryption/decryption, "
         "install it with: pip install cryptg",
         UserWarning,
-        stacklevel=2
+        stacklevel=2,
     )
 
 from . import (
-    AccountMethods, AuthMethods, DownloadMethods, DialogMethods, ChatMethods,
-    BotMethods, MessageMethods, UploadMethods, ButtonMethods, UpdateMethods,
-    MessageParseMethods, UserMethods, ReactionMethods, GiftMethods, TelegramBaseClient
+    AccountMethods,
+    AuthMethods,
+    DownloadMethods,
+    DialogMethods,
+    ChatMethods,
+    BotMethods,
+    MessageMethods,
+    UploadMethods,
+    ButtonMethods,
+    UpdateMethods,
+    MessageParseMethods,
+    UserMethods,
+    ReactionMethods,
+    GiftMethods,
+    TelegramBaseClient,
 )
 
 
 class TelegramClient(
-    AccountMethods, AuthMethods, DownloadMethods, DialogMethods, ChatMethods,
-    BotMethods, MessageMethods, UploadMethods, ButtonMethods, UpdateMethods,
-    MessageParseMethods, UserMethods, ReactionMethods, GiftMethods, TelegramBaseClient
+    AccountMethods,
+    AuthMethods,
+    DownloadMethods,
+    DialogMethods,
+    ChatMethods,
+    BotMethods,
+    MessageMethods,
+    UploadMethods,
+    ButtonMethods,
+    UpdateMethods,
+    MessageParseMethods,
+    UserMethods,
+    ReactionMethods,
+    GiftMethods,
+    TelegramBaseClient,
 ):
     pass

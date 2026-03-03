@@ -5,10 +5,7 @@ if typing.TYPE_CHECKING:
     from .telegramclient import TelegramClient
 
 # Type for middleware function: async def mw(event, next) -> None
-MiddlewareFunc = typing.Callable[
-    [typing.Any, typing.Callable],
-    typing.Awaitable[None]
-]
+MiddlewareFunc = typing.Callable[[typing.Any, typing.Callable], typing.Awaitable[None]]
 
 
 class MiddlewareManager:
@@ -28,6 +25,7 @@ class MiddlewareManager:
         Each middleware receives (event, next) and must call await next()
         to pass control further.
         """
+
         async def build_chain(index: int):
             if index >= len(self._middlewares):
                 # end of chain — call the actual handler
