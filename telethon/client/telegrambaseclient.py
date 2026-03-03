@@ -327,11 +327,11 @@ class TelegramBaseClient(abc.ABC):
         self.api_hash = api_hash
 
         if local_addr is not None:
-            if use_ipv6 is False and ':' in local_addr:
+            if not use_ipv6 and ':' in local_addr:
                 raise TypeError(
                     'A local IPv6 address must only be used with `use_ipv6=True`.'
                 )
-            elif use_ipv6 is True and ':' not in local_addr:
+            elif use_ipv6 and ':' not in local_addr:
                 raise TypeError(
                     '`use_ipv6=True` must only be used with a local IPv6 address.'
                 )

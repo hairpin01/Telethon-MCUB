@@ -71,7 +71,7 @@ def _resize_photo_if_needed(
 
         if image.mode == 'RGB':
             # Check if image is within acceptable bounds, if so, check if the image is at or below 10 MB, or assume it isn't if size is None or 0
-            if image.width <= width and image.height <= height and (before <= 10000000 if before else False):
+            if image.width <= width and image.height <= height and (before and before <= 10000000):
                 return file
 
             # If the image is already RGB, don't convert it

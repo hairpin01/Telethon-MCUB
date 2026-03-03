@@ -27,14 +27,15 @@ class EntityCache:
         if id in self._access_cache:
             return self._access_cache[id]
         
-        try:
-            hash, ty = self.hash_map[id]
-            entity = Entity(ty, id, hash)
-            if len(self._access_cache) < 1000:
-                self._access_cache[id] = entity
-            return entity
-        except KeyError:
+        result = self.hash_map.get(id)
+        if result is None:
             return None
+        
+        hash, ty = result
+        entity = Entity(ty, id, hash)
+        if len(self._access_cache) < 1000:
+            self._access_cache[id] = entity
+        return entity
 
     def extend(self, users, chats):
         cache_updated = False

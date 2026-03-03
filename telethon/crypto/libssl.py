@@ -27,7 +27,7 @@ def _find_ssl_lib():
         # macOS 10.14 "mojave" is the last known major release
         # to support unversioned libssl.dylib. Anything above
         # needs specific versions
-        if int(ver) > 10 or int(ver) == 10 and int(major) > 14:
+        if int(ver) > 10 or (int(ver) == 10 and int(major) > 14):
             lib = (
                 ctypes.util.find_library('libssl.46') or
                 ctypes.util.find_library('libssl.44') or

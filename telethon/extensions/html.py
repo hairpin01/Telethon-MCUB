@@ -124,13 +124,14 @@ class HTMLToTelegramParser(HTMLParser):
             self._open_tags.popleft()
             self._open_tags_meta.popleft()
         elif tag in self._open_tags:
-            idx = list(self._open_tags).index(tag)
-            open_tags_list = list(self._open_tags)
-            open_tags_meta_list = list(self._open_tags_meta)
-            del open_tags_list[idx]
-            del open_tags_meta_list[idx]
-            self._open_tags = deque(open_tags_list)
-            self._open_tags_meta = deque(open_tags_meta_list)
+            idx = None
+            for i, t in enumerate(self._open_tags):
+                if t == tag:
+                    idx = i
+                    break
+            if idx is not None:
+                del self._open_tags[idx]
+                del self._open_tags_meta[idx]
 
         entity = self._building_entities.pop(tag, None)
         if entity:

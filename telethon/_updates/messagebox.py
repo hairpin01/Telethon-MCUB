@@ -475,7 +475,7 @@ class MessageBox:
                 self._trace('Trying to re-apply %r possible gaps', len(self.possible_gaps))
 
             # For each update in possible gaps, see if the gap has been resolved already.
-            for key in list(self.possible_gaps.keys()):
+            for key in self.possible_gaps:
                 self.possible_gaps[key].updates.sort(key=_sort_gaps)
 
                 for _ in range(len(self.possible_gaps[key].updates)):

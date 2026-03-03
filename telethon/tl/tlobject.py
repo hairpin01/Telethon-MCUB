@@ -61,7 +61,7 @@ class TLObject:
                     '{}={}'.format(k, TLObject.pretty_format(v))
                     for k, v in obj.items() if k != '_'
                 ))
-            elif isinstance(obj, str) or isinstance(obj, bytes):
+            elif isinstance(obj, (str, bytes)):
                 try:
                     text = obj.decode() if isinstance(obj, bytes) else obj
                 except Exception:
@@ -103,7 +103,7 @@ class TLObject:
                     result.append('\t' * indent)
                 result.append(')')
 
-            elif isinstance(obj, str) or isinstance(obj, bytes):
+            elif isinstance(obj, (str, bytes)):
                 try:
                     text = obj.decode() if isinstance(obj, bytes) else obj
                 except Exception:

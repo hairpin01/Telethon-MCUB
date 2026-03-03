@@ -133,10 +133,10 @@ class MessageButton:
             if not share_phone:
                 raise ValueError('cannot click on phone buttons unless share_phone=True')
 
-            if share_phone == True or isinstance(share_phone, str):
+            if share_phone is True or isinstance(share_phone, str):
                 me = await self._client.get_me()
                 share_phone = types.InputMediaContact(
-                    phone_number=me.phone if share_phone == True else share_phone,
+                    phone_number=me.phone if share_phone is True else share_phone,
                     first_name=me.first_name or '',
                     last_name=me.last_name or '',
                     vcard=''
