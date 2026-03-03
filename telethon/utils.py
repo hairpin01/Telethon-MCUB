@@ -9,7 +9,6 @@ import inspect
 import io
 import itertools
 import logging
-import math
 import mimetypes
 import os
 import pathlib
@@ -21,7 +20,7 @@ from mimetypes import guess_extension
 from types import GeneratorType
 
 from .extensions import markdown, html
-from .helpers import add_surrogate, del_surrogate, strip_text
+from .helpers import add_surrogate, del_surrogate
 from .tl import types
 
 try:
@@ -693,8 +692,10 @@ def get_attributes(file, *, attributes=None, mime_type=None,
     if mime_type is None:
         mime_type = mimetypes.guess_type(name)[0]
 
-    attr_dict = {types.DocumentAttributeFilename:
-        types.DocumentAttributeFilename(os.path.basename(name))}
+    attr_dict = {
+        types.DocumentAttributeFilename:
+            types.DocumentAttributeFilename(os.path.basename(name))
+    }
 
     if is_audio(file):
         m = _get_metadata(file)
@@ -777,7 +778,7 @@ def sanitize_parse_mode(mode):
         return None
 
     if (all(hasattr(mode, x) for x in ('parse', 'unparse'))
-          and all(callable(x) for x in (mode.parse, mode.unparse))):
+            and all(callable(x) for x in (mode.parse, mode.unparse))):
         return mode
     elif callable(mode):
         class CustomMode:
@@ -1523,6 +1524,7 @@ class AsyncClassWrapper:
 
     def __getattr__(self, item):
         w = getattr(self.wrapped, item)
+
         async def wrapper(*args, **kwargs):
             val = w(*args, **kwargs)
             return await val if inspect.isawaitable(val) else val
