@@ -39,4 +39,6 @@ Issues = "https://github.com/hairpin01/Telethon-MCUB/issues"
 version = { attr = "telethon.version.__version__" }
 
 [tool.setuptools.packages.find]
-exclude = ["telethon_*", "tests*"]
+include = ["telethon*"]
+exclude = ["telethon_*", "tests*", "build*", "dist*", "*.egg-info*", "deps*"]
+namespaces = false

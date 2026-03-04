@@ -169,8 +169,15 @@ def generate(which, action="gen"):
 
 
 def main(argv):
-    if len(argv) >= 2 and argv[1] in ("gen", "clean"):
-        generate(argv[2:], argv[1])
+    if len(argv) >= 2 and argv[1] == "gen":
+        generate(argv[2:], "gen")
+
+    elif (
+        len(argv) >= 2
+        and argv[1] == "clean"
+        and all(not arg.startswith("-") for arg in argv[2:])
+    ):
+        generate(argv[2:], "clean")
 
     elif len(argv) >= 2 and argv[1] == "pypi":
         # Make sure tl.telethon.dev is up-to-date first
@@ -225,7 +232,7 @@ def main(argv):
 
     else:
         # e.g. install from GitHub
-        if GENERATOR_DIR.is_dir():
+        if GENERATOR_DIR.is_dir() and not (len(argv) >= 2 and argv[1] == "clean"):
             generate(["tl", "errors"])
 
         # Get the long description from the README file
@@ -266,7 +273,17 @@ def main(argv):
                 "Programming Language :: Python :: 3.8",
             ],
             keywords="telegram api chat client library messaging mtproto",
-            packages=find_packages(exclude=["telethon_*", "tests*"]),
+            packages=find_packages(
+                include=["telethon*"],
+                exclude=[
+                    "telethon_*",
+                    "tests*",
+                    "build*",
+                    "dist*",
+                    "*.egg-info*",
+                    "deps*",
+                ],
+            ),
             install_requires=["pyaes", "rsa"],
             extras_require={"cryptg": ["cryptg"]},
         )
