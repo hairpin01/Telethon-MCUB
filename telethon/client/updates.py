@@ -694,15 +694,13 @@ class UpdateMethods:
         """
         Dispatches a single, out-of-order event. Used by `AlbumHack`.
         """
-        # Build type->handlers mapping if empty
-        if not self._event_builders_by_type:
-            for builder, callback in self._event_builders:
-                self._event_builders_by_type.setdefault(type(builder), []).append(
-                    (builder, callback)
-                )
-
-        event_type = type(event)
-        handlers = self._event_builders_by_type.get(event_type, [])
+        # `_dispatch_event` receives already-built event instances (for example
+        # from AlbumHack), so we need to match handlers against `builder.Event`.
+        handlers = []
+        for builder, callback in self._event_builders:
+            builder_event = getattr(builder, "Event", None)
+            if builder_event is not None and isinstance(event, builder_event):
+                handlers.append((builder, callback))
 
         for builder, callback in handlers:
             if isinstance(builder, events.Raw):
@@ -814,5 +812,3 @@ class EventBuilderDict:
             return self[builder]
         except (KeyError, AttributeError):
             return default
-
-            return event

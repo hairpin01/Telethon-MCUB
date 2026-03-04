@@ -39,17 +39,19 @@ class GiftMethods:
         limit: int = 0,
         offset: str = "",
     ) -> 'typing.AsyncGenerator["custom.StarGift", None]':
+        if limit < 0:
+            raise ValueError("limit must be greater than or equal to 0")
 
         current = 0
         total = limit or (1 << 31) - 1
-        limit = min(100, limit)
+        page_limit = 100 if limit == 0 else min(100, limit)
 
         while True:
             r = await self(
                 functions.payments.GetSavedStarGiftsRequest(
                     peer=peer,
                     offset=offset,
-                    limit=limit,
+                    limit=page_limit,
                     exclude_unsaved=exclude_unsaved,
                     exclude_saved=exclude_saved,
                     exclude_unlimited=exclude_unlimited,

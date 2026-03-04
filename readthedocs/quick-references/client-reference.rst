@@ -67,6 +67,7 @@ Messages
     pin_message
     unpin_message
     send_read_acknowledge
+    translate
 
 Uploads
 -------
@@ -78,6 +79,7 @@ Uploads
 
     send_file
     upload_file
+    upload_files
 
 Downloads
 ---------
@@ -169,6 +171,32 @@ Updates
     list_event_handlers
     catch_up
     set_receive_updates
+    middleware
+
+Reactions
+---------
+
+.. py:currentmodule:: telethon.client.reactions.ReactionMethods
+
+.. autosummary::
+    :nosignatures:
+
+    send_reaction
+    get_message_reactions_list
+    set_default_reaction
+    set_chat_available_reactions
+    send_photo_as_private
+
+Gifts
+-----
+
+.. py:currentmodule:: telethon.client.payments.GiftMethods
+
+.. autosummary::
+    :nosignatures:
+
+    get_saved_gifts
+    upgrade_gift
 
 Bots
 ----

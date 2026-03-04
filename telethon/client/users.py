@@ -28,7 +28,12 @@ def _fmt_flood(delay, request, *, early=False, td=datetime.timedelta):
 
 class UserMethods:
     async def __call__(self: "TelegramClient", request, ordered=False, flood_sleep_threshold=None):
-        return await self._call(self._sender, request, ordered=ordered)
+        return await self._call(
+            self._sender,
+            request,
+            ordered=ordered,
+            flood_sleep_threshold=flood_sleep_threshold,
+        )
 
     async def _call(
         self: "TelegramClient", sender, request, ordered=False, flood_sleep_threshold=None
@@ -39,16 +44,22 @@ class UserMethods:
             )
         # if the loop is None it will fail with a connection error later on
 
-        if hasattr(request, "CONSTRUCTOR_ID") and request.CONSTRUCTOR_ID in DANGEROUS_REQUEST_IDS:
-            raise ScamModuleDetected(f"Method '{type(request).__name__}' blocked!")
-
         if flood_sleep_threshold is None:
             flood_sleep_threshold = self.flood_sleep_threshold
-        requests = list(request) if utils.is_list_like(request) else [request]
-        request = list(request) if utils.is_list_like(request) else request
+        is_list_like_request = utils.is_list_like(request)
+        if is_list_like_request:
+            requests = list(request)
+            request = list(requests)
+        else:
+            requests = [request]
+
         for i, r in enumerate(requests):
             if not isinstance(r, TLRequest):
                 raise _NOT_A_REQUEST()
+
+            if r.CONSTRUCTOR_ID in DANGEROUS_REQUEST_IDS:
+                raise ScamModuleDetected(f"Method '{type(r).__name__}' blocked!")
+
             await r.resolve(self, utils)
 
             # Avoid making the request if it's already in a flood wait
@@ -65,7 +76,7 @@ class UserMethods:
                     raise errors.FloodWaitError(request=r, capture=diff)
 
             if self._no_updates:
-                if utils.is_list_like(request):
+                if is_list_like_request:
                     request[i] = functions.InvokeWithoutUpdatesRequest(r)
                 else:
                     # This should only run once as requests should be a list of 1 item
