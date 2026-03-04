@@ -303,9 +303,7 @@ class Message(ChatGetter, SenderGetter, TLObject):
                 sender_id = utils.get_peer_id(peer_id)
 
         # Hide messages from RESTRICT_IDS
-        if from_id is not None and (
-            _from_id := getattr(self, "from_id", None) or getattr(self, "peer_id", None)
-        ):
+        if _from_id := getattr(self, "from_id", None) or getattr(self, "peer_id", None):
             all_values = _from_id.to_dict().values()
             for i in RESTRICT_IDS:
                 if i in all_values:

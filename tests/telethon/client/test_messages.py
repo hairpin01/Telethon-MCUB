@@ -144,3 +144,18 @@ def test_message_content_is_masked_for_restricted_sender():
 
     assert restricted_message.message == DUMMY_MESSAGE_KWARGS["message"]
     assert restricted_message.reply_markup is None
+
+
+def test_message_content_is_masked_for_restricted_peer_without_from_id():
+    visible_reply_markup = object()
+    restricted_message = Message(
+        id=1,
+        peer_id=PeerUser(777000),
+        from_id=None,
+        date=None,
+        message="secret",
+        reply_markup=visible_reply_markup,
+    )
+
+    assert restricted_message.message == DUMMY_MESSAGE_KWARGS["message"]
+    assert restricted_message.reply_markup is None
