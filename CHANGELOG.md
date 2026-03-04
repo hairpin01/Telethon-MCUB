@@ -1,5 +1,32 @@
 # Telethon-MCUB Changelog
 
+## v1.42.9.post6 (2026-03-04)
+
+### Security / Protection
+
+- Fixed masking for restricted system peers when `from_id` is missing (private/system dialogs may come with `from_id=None`).
+- Added regression test for `peer_id=777000` + `from_id=None`.
+
+### Documentation
+
+- Added AntiScamModules usage example (blocked dangerous request and expected `ScamModuleDetected`):
+
+```python
+from telethon import functions
+from telethon.client.protection import ScamModuleDetected
+
+try:
+    req = functions.InvokeWithoutUpdatesRequest(
+        query=functions.InvokeWithTakeoutRequest(
+            takeout_id=1,
+            query=functions.account.DeleteAccountRequest(reason="test"),
+        )
+    )
+    await client(req)
+except ScamModuleDetected as e:
+    print(e)  # Method 'DeleteAccountRequest' blocked!
+```
+
 ## v1.42.9.post3 (2026-03-04)
 
 ### Release
