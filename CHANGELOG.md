@@ -1,5 +1,38 @@
 # Telethon-MCUB Changelog
 
+## v1.42.8 (2026-03-04)
+
+### New Features
+
+#### Reactions (`telethon/client/reactions.py`)
+- Added `iter_message_reactions()` - Async iterator over message reactions with pagination
+- Added `clear_reaction()` - Remove own reaction from a message
+- Added `get_message_read_participants()` - Get users who read a message
+- Added `get_available_reactions()` - Get account-available reactions
+- Added `get_available_effects()` - Get account-available message effects
+- Added `send_story_reaction()` - Send reaction to a story
+- Enhanced `get_message_reactions_list()` with `offset` support for pagination
+
+### Security Improvements
+
+#### Protection (`telethon/client/protection.py`, `telethon/client/users.py`)
+- Added recursive detection of dangerous requests inside `Invoke*` wrappers
+- Extended blocked request list with:
+  - `auth.ResetAuthorizationsRequest`
+  - `auth.LogOutRequest`
+  - `account.InitTakeoutSessionRequest`
+- Hardened batched request checking in `_call()`
+
+### Bug Fixes
+
+#### Core Client
+- Fixed flood threshold forwarding in `UserMethods.__call__`
+- Fixed `_dispatch_event()` dispatch for pre-built events (e.g. album hack flow)
+- Fixed generator-based request handling in `_call()`
+
+### Documentation
+- Synced quick reference with all public `TelegramClient` methods
+
 ## v1.42.5 (2026-03-02)
 
 ### New Features

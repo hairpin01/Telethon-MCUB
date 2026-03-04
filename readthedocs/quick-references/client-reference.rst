@@ -183,6 +183,12 @@ Reactions
 
     send_reaction
     get_message_reactions_list
+    iter_message_reactions
+    clear_reaction
+    get_message_read_participants
+    get_available_reactions
+    get_available_effects
+    send_story_reaction
     set_default_reaction
     set_chat_available_reactions
     send_photo_as_private

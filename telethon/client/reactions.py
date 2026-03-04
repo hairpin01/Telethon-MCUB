@@ -55,6 +55,7 @@ class ReactionMethods:
         message: typing.Union[int, "types.Message"],
         reaction: typing.Optional[str] = None,
         limit: int = 100,
+        offset: typing.Optional[str] = None,
     ):
         """
         Get the list of users who reacted to a message.
@@ -64,6 +65,7 @@ class ReactionMethods:
             message: The message ID or Message object.
             reaction: Filter by specific reaction.
             limit: Number of results.
+            offset: Pagination offset from previous response.
 
         Returns:
             MessageReactionsList with users and reactions.
@@ -77,7 +79,109 @@ class ReactionMethods:
 
         return await self(
             functions.messages.GetMessageReactionsListRequest(
-                peer=peer, id=msg_id, reaction=reaction_obj, limit=limit
+                peer=peer, id=msg_id, reaction=reaction_obj, limit=limit, offset=offset
+            )
+        )
+
+    async def iter_message_reactions(
+        self: "TelegramClient",
+        entity: "hints.EntityLike",
+        message: typing.Union[int, "types.Message"],
+        reaction: typing.Optional[str] = None,
+        limit: typing.Optional[int] = None,
+        batch_size: int = 100,
+    ) -> "typing.AsyncGenerator[types.TypeMessagePeerReaction, None]":
+        """
+        Iterate users who reacted to a message with pagination support.
+        """
+        if batch_size < 1:
+            raise ValueError("batch_size must be greater than 0")
+        if limit is not None and limit < 0:
+            raise ValueError("limit must be greater than or equal to 0")
+
+        remaining = limit
+        offset = None
+
+        while True:
+            page_limit = batch_size if remaining is None else min(batch_size, remaining)
+            if page_limit <= 0:
+                return
+
+            page = await self.get_message_reactions_list(
+                entity=entity,
+                message=message,
+                reaction=reaction,
+                limit=page_limit,
+                offset=offset,
+            )
+            reactions = page.reactions or []
+            if not reactions:
+                return
+
+            for item in reactions:
+                yield item
+                if remaining is not None:
+                    remaining -= 1
+                    if remaining <= 0:
+                        return
+
+            offset = page.next_offset
+            if not offset:
+                return
+
+    async def clear_reaction(
+        self: "TelegramClient",
+        entity: "hints.EntityLike",
+        message: typing.Union[int, "types.Message"],
+    ):
+        """
+        Remove own reaction from a message.
+        """
+        return await self.send_reaction(entity=entity, message=message, reaction=[])
+
+    async def get_message_read_participants(
+        self: "TelegramClient",
+        entity: "hints.EntityLike",
+        message: typing.Union[int, "types.Message"],
+    ):
+        """
+        Get list of users who read the message.
+        """
+        peer = await self.get_input_entity(entity)
+        msg_id = message.id if hasattr(message, "id") else message
+
+        return await self(functions.messages.GetMessageReadParticipantsRequest(peer=peer, msg_id=msg_id))
+
+    async def get_available_reactions(self: "TelegramClient", hash: int = 0):
+        """
+        Get available reactions list.
+        """
+        return await self(functions.messages.GetAvailableReactionsRequest(hash=hash))
+
+    async def get_available_effects(self: "TelegramClient", hash: int = 0):
+        """
+        Get available message effects list.
+        """
+        return await self(functions.messages.GetAvailableEffectsRequest(hash=hash))
+
+    async def send_story_reaction(
+        self: "TelegramClient",
+        entity: "hints.EntityLike",
+        story_id: int,
+        reaction: str = "👍",
+        add_to_recent: bool = True,
+    ):
+        """
+        Send reaction to a story.
+        """
+        peer = await self.get_input_entity(entity)
+        reaction_obj = types.ReactionEmoji(emoticon=reaction)
+        return await self(
+            functions.stories.SendReactionRequest(
+                peer=peer,
+                story_id=story_id,
+                reaction=reaction_obj,
+                add_to_recent=add_to_recent,
             )
         )
 

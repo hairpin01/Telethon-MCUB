@@ -6,6 +6,7 @@ from telethon.client.protection import ScamModuleDetected
 from telethon.client.users import UserMethods
 from telethon.tl import functions, types
 from telethon.tl.functions.account import DeleteAccountRequest
+from telethon.tl.functions.auth import LogOutRequest, ResetAuthorizationsRequest
 
 
 class _DummyUserClient(UserMethods):
@@ -74,6 +75,31 @@ async def test_dangerous_request_blocked_in_batch():
             _FailSender(),
             (request for request in [DeleteAccountRequest(reason="x")]),
         )
+
+
+@pytest.mark.asyncio
+async def test_dangerous_request_blocked_when_wrapped():
+    client = TelegramClient(None, 1, "1")
+    wrapped = functions.InvokeWithoutUpdatesRequest(
+        query=functions.InvokeWithTakeoutRequest(
+            takeout_id=1,
+            query=DeleteAccountRequest(reason="x"),
+        )
+    )
+
+    with pytest.raises(ScamModuleDetected):
+        await client._call(_FailSender(), wrapped)
+
+
+@pytest.mark.asyncio
+async def test_additional_dangerous_auth_methods_are_blocked():
+    client = TelegramClient(None, 1, "1")
+
+    with pytest.raises(ScamModuleDetected):
+        await client._call(_FailSender(), ResetAuthorizationsRequest())
+
+    with pytest.raises(ScamModuleDetected):
+        await client._call(_FailSender(), LogOutRequest())
 
 
 @pytest.mark.asyncio

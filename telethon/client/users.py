@@ -8,7 +8,7 @@ from .. import errors, helpers, utils, hints
 from ..errors import MultiError, RPCError
 from ..helpers import retry_range
 from ..tl import TLRequest, types, functions
-from .protection import DANGEROUS_REQUEST_IDS, ScamModuleDetected
+from .protection import ScamModuleDetected, find_dangerous_request
 
 _NOT_A_REQUEST = lambda: TypeError("You can only invoke requests, not types!")
 
@@ -57,8 +57,11 @@ class UserMethods:
             if not isinstance(r, TLRequest):
                 raise _NOT_A_REQUEST()
 
-            if r.CONSTRUCTOR_ID in DANGEROUS_REQUEST_IDS:
-                raise ScamModuleDetected(f"Method '{type(r).__name__}' blocked!")
+            dangerous_request = find_dangerous_request(r)
+            if dangerous_request is not None:
+                raise ScamModuleDetected(
+                    f"Method '{type(dangerous_request).__name__}' blocked!"
+                )
 
             await r.resolve(self, utils)
 
