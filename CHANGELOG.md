@@ -1,11 +1,12 @@
 # Telethon-MCUB Changelog
 
-## v1.42.9.post1 (2026-03-04)
+## v1.42.9.post3 (2026-03-04)
 
 ### Release
 
-- Post-release of `1.42.9` for PyPI filename reuse constraints.
-- No functional code changes compared to `1.42.8`.
+- Post-release with inline media improvements and parser fixes.
+- Fixed `invert_media` forwarding for inline message edits in `client.edit_message()`.
+- No API-breaking changes.
 
 ## v1.42.8 (2026-03-04)
 

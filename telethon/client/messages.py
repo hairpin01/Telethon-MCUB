@@ -1286,6 +1286,7 @@ class MessageMethods:
                 id=entity,
                 message=text,
                 no_webpage=not link_preview,
+                invert_media=invert_media,
                 entities=formatting_entities,
                 media=media,
                 reply_markup=self.build_reply_markup(buttons),
