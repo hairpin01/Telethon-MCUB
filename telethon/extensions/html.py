@@ -43,6 +43,8 @@ _TAG_TO_ENTITY = {
 }
 
 _MAILTO_LEN = len("mailto:")
+_LITERAL_TAG = object()
+_SUPPORTED_TAGS = frozenset(_TAG_TO_ENTITY) | {"a", "emoji"}
 
 
 class HTMLToTelegramParser(HTMLParser):
@@ -68,9 +70,27 @@ class HTMLToTelegramParser(HTMLParser):
         except ValueError:
             return None
 
+    def _append_text(self, text):
+        if not text:
+            return
+
+        for state in self._building_entities.values():
+            state["entity"].length += len(text)
+
+        self.text += text
+
+    def _mark_literal_starttag(self, tag):
+        self._open_tags_meta.popleft()
+        self._open_tags_meta.appendleft(_LITERAL_TAG)
+        self._append_text(self.get_starttag_text() or f"<{tag}>")
+
     def handle_starttag(self, tag, attrs):
         self._open_tags.appendleft(tag)
         self._open_tags_meta.appendleft(None)
+
+        if tag not in _SUPPORTED_TAGS:
+            self._mark_literal_starttag(tag)
+            return
 
         attrs_dict = dict(attrs)
         EntityType = _TAG_TO_ENTITY.get(tag)
@@ -83,6 +103,7 @@ class HTMLToTelegramParser(HTMLParser):
         elif tag == "a":
             url = attrs_dict.get("href")
             if url is None:
+                self._mark_literal_starttag(tag)
                 return
             if url.startswith("mailto:"):
                 url = url[_MAILTO_LEN:]
@@ -103,18 +124,22 @@ class HTMLToTelegramParser(HTMLParser):
         elif tag == "tg-emoji":
             emoji_id = attrs_dict.get("emoji-id")
             if emoji_id is None:
+                self._mark_literal_starttag(tag)
                 return
             try:
                 args["document_id"] = int(emoji_id)
             except ValueError:
+                self._mark_literal_starttag(tag)
                 return
         elif tag == "emoji":
             document_id = attrs_dict.get("document_id")
             if document_id is None:
+                self._mark_literal_starttag(tag)
                 return
             try:
                 args["document_id"] = int(document_id)
             except ValueError:
+                self._mark_literal_starttag(tag)
                 return
             EntityType = MessageEntityCustomEmoji
         elif tag == "blockquote":
@@ -151,15 +176,14 @@ class HTMLToTelegramParser(HTMLParser):
                 }
 
     def handle_data(self, text):
-        for state in self._building_entities.values():
-            state["entity"].length += len(text)
-
-        self.text += text
+        self._append_text(text)
 
     def handle_endtag(self, tag):
+        keep_literal = False
+
         if self._open_tags and self._open_tags[0] == tag:
             self._open_tags.popleft()
-            self._open_tags_meta.popleft()
+            keep_literal = self._open_tags_meta.popleft() is _LITERAL_TAG
         elif tag in self._open_tags:
             idx = None
             for i, t in enumerate(self._open_tags):
@@ -167,8 +191,12 @@ class HTMLToTelegramParser(HTMLParser):
                     idx = i
                     break
             if idx is not None:
+                keep_literal = self._open_tags_meta[idx] is _LITERAL_TAG
                 del self._open_tags[idx]
                 del self._open_tags_meta[idx]
+
+        if keep_literal:
+            self._append_text(f"</{tag}>")
 
         state = self._building_entities.get(tag)
         if not state:

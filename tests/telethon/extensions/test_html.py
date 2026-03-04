@@ -162,3 +162,15 @@ def test_unparse_formatted_text_keeps_quotes_but_escapes_markup_chars():
     text = 'say "yes" and \'no\' <b> & <i>'
     entities = [MessageEntityBold(offset=0, length=len(text))]
     assert html.unparse(text, entities) == '<strong>say "yes" and \'no\' &lt;b&gt; &amp; &lt;i&gt;</strong>'
+
+
+def test_parse_unknown_tags_are_kept_as_plain_text():
+    text, entities = html.parse("<unknown>hello</unknown>")
+    assert text == "<unknown>hello</unknown>"
+    assert entities == []
+
+
+def test_parse_invalid_anchor_is_kept_as_plain_text():
+    text, entities = html.parse("<a>hello</a>")
+    assert text == "<a>hello</a>"
+    assert entities == []
