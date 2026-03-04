@@ -3,6 +3,7 @@ Simple HTML -> Telegram entity parser.
 """
 
 import functools
+import re
 from collections import deque
 from html import escape
 from html.parser import HTMLParser
@@ -45,6 +46,18 @@ _TAG_TO_ENTITY = {
 _MAILTO_LEN = len("mailto:")
 _LITERAL_TAG = object()
 _SUPPORTED_TAGS = frozenset(_TAG_TO_ENTITY) | {"a", "emoji"}
+_VALID_TAG_NAME_RE = re.compile(r"^[A-Za-z][-.A-Za-z0-9:_]*$")
+_ANGLE_TAG_RE = re.compile(r"<\s*/?\s*([^\s<>/]+)(?:\s[^<>]*?)?\s*/?\s*>")
+
+
+def _escape_invalid_tag_syntax(text: str) -> str:
+    def replacer(match):
+        tag_name = match.group(1)
+        if _VALID_TAG_NAME_RE.match(tag_name):
+            return match.group(0)
+        return escape(match.group(0), quote=False)
+
+    return _ANGLE_TAG_RE.sub(replacer, text)
 
 
 class HTMLToTelegramParser(HTMLParser):
@@ -180,11 +193,14 @@ class HTMLToTelegramParser(HTMLParser):
 
     def handle_endtag(self, tag):
         keep_literal = False
+        matched_open_tag = False
 
         if self._open_tags and self._open_tags[0] == tag:
+            matched_open_tag = True
             self._open_tags.popleft()
             keep_literal = self._open_tags_meta.popleft() is _LITERAL_TAG
         elif tag in self._open_tags:
+            matched_open_tag = True
             idx = None
             for i, t in enumerate(self._open_tags):
                 if t == tag:
@@ -196,6 +212,9 @@ class HTMLToTelegramParser(HTMLParser):
                 del self._open_tags_meta[idx]
 
         if keep_literal:
+            self._append_text(f"</{tag}>")
+        elif not matched_open_tag and tag not in _SUPPORTED_TAGS:
+            # Preserve unmatched unknown closing tags as plain text.
             self._append_text(f"</{tag}>")
 
         state = self._building_entities.get(tag)
@@ -227,6 +246,7 @@ def parse(html: str) -> Tuple[str, List[TypeMessageEntity]]:
     if not html:
         return html, []
 
+    html = _escape_invalid_tag_syntax(html)
     parser = HTMLToTelegramParser()
     parser.feed(add_surrogate(html))
     text = strip_text(parser.text, parser.entities)

@@ -174,3 +174,17 @@ def test_parse_invalid_anchor_is_kept_as_plain_text():
     text, entities = html.parse("<a>hello</a>")
     assert text == "<a>hello</a>"
     assert entities == []
+
+
+def test_parse_mismatched_unknown_closing_tag_is_kept_as_plain_text():
+    source = "<unknown>hello</other>"
+    text, entities = html.parse(source)
+    assert text == source
+    assert entities == []
+
+
+def test_parse_non_ascii_tag_names_are_kept_as_plain_text():
+    source = "<ьоашщвыоагвшыоашгщыашгщоашгщфывошаоывшщао>abc</авлашзщ>"
+    text, entities = html.parse(source)
+    assert text == source
+    assert entities == []
