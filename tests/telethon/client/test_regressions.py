@@ -2,9 +2,9 @@ import pytest
 
 from telethon import TelegramClient, events
 from telethon.client.payments import GiftMethods
-from telethon.client.protection import ScamModuleDetected
+from telethon.client.protection import ScamModuleDetected, find_dangerous_request
 from telethon.client.users import UserMethods
-from telethon.tl import functions, types
+from telethon.tl import TLRequest, functions, types
 from telethon.tl.functions.account import DeleteAccountRequest
 from telethon.tl.functions.auth import LogOutRequest, ResetAuthorizationsRequest
 
@@ -55,6 +55,18 @@ class _DummyGiftClient(GiftMethods):
         return _Result()
 
 
+class _WrapperRequest(TLRequest):
+    CONSTRUCTOR_ID = 0x77AACC11
+    SUBCLASS_OF_ID = 0
+
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+
+    def to_dict(self):
+        return {"_": "_WrapperRequest"}
+
+
 @pytest.mark.asyncio
 async def test_call_forwards_flood_sleep_threshold():
     client = _DummyUserClient()
@@ -85,6 +97,33 @@ async def test_dangerous_request_blocked_when_wrapped():
             takeout_id=1,
             query=DeleteAccountRequest(reason="x"),
         )
+    )
+
+    with pytest.raises(ScamModuleDetected):
+        await client._call(_FailSender(), wrapped)
+
+
+def test_find_dangerous_request_ignores_non_request_input():
+    assert find_dangerous_request(None) is None
+    assert find_dangerous_request(object()) is None
+
+
+@pytest.mark.asyncio
+async def test_dangerous_request_blocked_inside_generator_container():
+    client = TelegramClient(None, 1, "1")
+    wrapped = _WrapperRequest(
+        requests=(request for request in [DeleteAccountRequest(reason="x")]),
+    )
+
+    with pytest.raises(ScamModuleDetected):
+        await client._call(_FailSender(), wrapped)
+
+
+@pytest.mark.asyncio
+async def test_dangerous_request_blocked_inside_mapping_container():
+    client = TelegramClient(None, 1, "1")
+    wrapped = _WrapperRequest(
+        requests={"danger": DeleteAccountRequest(reason="x")},
     )
 
     with pytest.raises(ScamModuleDetected):

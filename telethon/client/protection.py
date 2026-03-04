@@ -1,3 +1,5 @@
+from collections.abc import Iterable, Mapping
+
 from telethon.tl import TLRequest
 from telethon.tl.functions.account import (
     DeleteAccountRequest,
@@ -49,6 +51,9 @@ def find_dangerous_request(request: TLRequest):
     """
     Find blocked requests even when they are wrapped with `Invoke*` containers.
     """
+    if not isinstance(request, TLRequest):
+        return None
+
     stack = [request]
     seen = set()
 
@@ -69,9 +74,13 @@ def find_dangerous_request(request: TLRequest):
 
         for attr in ("queries", "requests"):
             value = getattr(current, attr, None)
-            if isinstance(value, (list, tuple, set)):
-                for inner in value:
-                    if isinstance(inner, TLRequest):
-                        stack.append(inner)
+            if isinstance(value, Mapping):
+                value = value.values()
+            elif isinstance(value, (str, bytes, bytearray)) or not isinstance(value, Iterable):
+                continue
+
+            for inner in value:
+                if isinstance(inner, TLRequest):
+                    stack.append(inner)
 
     return None

@@ -6,7 +6,8 @@ import pytest
 
 from telethon import TelegramClient
 from telethon.client import MessageMethods
-from telethon.tl.types import PeerChat, MessageMediaDocument, Message, MessageEntityBold
+from telethon.tl.tlobject import DUMMY_MESSAGE_KWARGS
+from telethon.tl.types import PeerChat, PeerUser, MessageMediaDocument, Message, MessageEntityBold
 
 
 @pytest.mark.asyncio
@@ -82,3 +83,64 @@ class TestMessageMethods:
                 send_as=None, message_effect_id=None,
             )
             assert result == expected_result
+
+
+class _RestrictedForwardClient(MessageMethods):
+    def __init__(self):
+        self.sent_requests = []
+
+    async def get_input_entity(self, entity):
+        return entity
+
+    async def get_peer_id(self, peer):
+        return peer
+
+    async def __call__(self, request):
+        self.sent_requests.append(request)
+        return object()
+
+    def _get_response_message(self, *args, **kwargs):
+        return []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("restricted_id", [777000, 489000, 4245000])
+async def test_forward_messages_blocks_restricted_from_peer(restricted_id):
+    client = _RestrictedForwardClient()
+
+    with pytest.raises(ValueError, match="Forwarding from this peer is forbidden"):
+        await client.forward_messages("target", [1], from_peer=restricted_id)
+
+    assert client.sent_requests == []
+
+
+@pytest.mark.asyncio
+async def test_forward_messages_blocks_restricted_sender_message():
+    client = _RestrictedForwardClient()
+    restricted_message = Message(
+        id=1,
+        peer_id=PeerUser(42),
+        from_id=PeerUser(777000),
+        date=None,
+        message="secret",
+    )
+
+    with pytest.raises(ValueError, match="Forwarding messages from this user is forbidden"):
+        await client.forward_messages("target", [restricted_message])
+
+    assert client.sent_requests == []
+
+
+def test_message_content_is_masked_for_restricted_sender():
+    visible_reply_markup = object()
+    restricted_message = Message(
+        id=1,
+        peer_id=PeerUser(42),
+        from_id=PeerUser(777000),
+        date=None,
+        message="secret",
+        reply_markup=visible_reply_markup,
+    )
+
+    assert restricted_message.message == DUMMY_MESSAGE_KWARGS["message"]
+    assert restricted_message.reply_markup is None
