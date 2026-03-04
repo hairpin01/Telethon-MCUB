@@ -38,6 +38,7 @@ _TAG_TO_ENTITY = {
     "s": MessageEntityStrike,
     "blockquote": MessageEntityBlockquote,
     "code": MessageEntityCode,
+    "mono": MessageEntityCode,
     "pre": MessageEntityPre,
     "tg-emoji": MessageEntityCustomEmoji,
     "tg-spoiler": MessageEntitySpoiler,
@@ -45,7 +46,7 @@ _TAG_TO_ENTITY = {
 
 _MAILTO_LEN = len("mailto:")
 _LITERAL_TAG = object()
-_SUPPORTED_TAGS = frozenset(_TAG_TO_ENTITY) | {"a", "emoji"}
+_SUPPORTED_TAGS = frozenset(_TAG_TO_ENTITY) | {"a", "emoji", "mono"}
 _VALID_TAG_NAME_RE = re.compile(r"^[A-Za-z][-.A-Za-z0-9:_]*$")
 _ANGLE_TAG_RE = re.compile(r"<\s*/?\s*([^\s<>/]+)(?:\s[^<>]*?)?\s*/?\s*>")
 
@@ -171,7 +172,7 @@ class HTMLToTelegramParser(HTMLParser):
                     args["collapsed"] = None
             else:
                 args["collapsed"] = None
-        elif tag == "code" and "pre" in self._building_entities:
+        elif (tag == "code" or tag == "mono") and "pre" in self._building_entities:
             pre = self._building_entities["pre"]["entity"]
             cls = attrs_dict.get("class", "")
             if cls.startswith("language-"):
