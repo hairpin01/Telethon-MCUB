@@ -151,3 +151,14 @@ def test_unparse_pre_entity_without_language_has_plain_code_tag():
     text = "pip install -e . --upgrade"
     entities = [MessageEntityPre(offset=0, length=len(text), language="")]
     assert html.unparse(text, entities) == "<pre><code>pip install -e . --upgrade</code></pre>"
+
+
+def test_unparse_plain_text_keeps_quotes_but_escapes_markup_chars():
+    text = 'say "yes" and \'no\' <b> & <i>'
+    assert html.unparse(text, []) == 'say "yes" and \'no\' &lt;b&gt; &amp; &lt;i&gt;'
+
+
+def test_unparse_formatted_text_keeps_quotes_but_escapes_markup_chars():
+    text = 'say "yes" and \'no\' <b> & <i>'
+    entities = [MessageEntityBold(offset=0, length=len(text))]
+    assert html.unparse(text, entities) == '<strong>say "yes" and \'no\' &lt;b&gt; &amp; &lt;i&gt;</strong>'

@@ -259,7 +259,7 @@ def unparse(text: str, entities: Iterable[TypeMessageEntity]) -> str:
     if not text:
         return text
     elif not entities:
-        return escape(text)
+        return escape(text, quote=False)
 
     if isinstance(entities, TLObject):
         entities = (entities,)
@@ -287,13 +287,18 @@ def unparse(text: str, entities: Iterable[TypeMessageEntity]) -> str:
             text = (
                 text[:at]
                 + what.text
-                + escape(text[at:next_escape_bound])
+                + escape(text[at:next_escape_bound], quote=False)
                 + text[next_escape_bound:]
             )
         else:
-            text = text[:at] + what + escape(text[at:next_escape_bound]) + text[next_escape_bound:]
+            text = (
+                text[:at]
+                + what
+                + escape(text[at:next_escape_bound], quote=False)
+                + text[next_escape_bound:]
+            )
         next_escape_bound = at
 
-    text = escape(text[:next_escape_bound]) + text[next_escape_bound:]
+    text = escape(text[:next_escape_bound], quote=False) + text[next_escape_bound:]
 
     return del_surrogate(text)
