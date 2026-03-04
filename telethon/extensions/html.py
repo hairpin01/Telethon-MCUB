@@ -126,9 +126,11 @@ class HTMLToTelegramParser(HTMLParser):
                     normalized_expandable = str(expandable_value).strip().lower()
 
                 if normalized_expandable in ("", "true", "1", "yes", "on"):
-                    args["collapsed"] = False
-                else:
+                    # MTProto uses `collapsed=True` to represent expandable blockquotes.
                     args["collapsed"] = True
+                else:
+                    # False-like values should behave like a regular blockquote.
+                    args["collapsed"] = None
             else:
                 args["collapsed"] = None
         elif tag == "code" and "pre" in self._building_entities:
@@ -207,12 +209,9 @@ def parse(html: str) -> Tuple[str, List[TypeMessageEntity]]:
 
 def _make_blockquote_formatter():
     def formatter(e, _text):
-        if e.collapsed is False:
+        if e.collapsed:
             return "<blockquote expandable>", "</blockquote>"
-        elif e.collapsed is True:
-            return '<blockquote expandable="false">', "</blockquote>"
-        else:
-            return "<blockquote>", "</blockquote>"
+        return "<blockquote>", "</blockquote>"
 
     return formatter
 

@@ -4,6 +4,7 @@ Tests for `telethon.extensions.html`.
 from telethon.extensions import html
 from telethon.tl.types import (
     MessageEntityBold,
+    MessageEntityBlockquote,
     MessageEntityItalic,
     MessageEntityMentionName,
     MessageEntityTextUrl,
@@ -95,6 +96,30 @@ def test_blockquote_expandable_none():
     text, entities = html.parse('<blockquote expandable>test</blockquote>')
     assert text == 'test'
     assert len(entities) == 1
+
+
+def test_blockquote_expandable_sets_collapsed_true():
+    text, entities = html.parse('<blockquote expandable>test</blockquote>')
+    assert text == 'test'
+    assert entities == [MessageEntityBlockquote(offset=0, length=4, collapsed=True)]
+
+
+def test_blockquote_plain_sets_collapsed_none():
+    text, entities = html.parse('<blockquote>test</blockquote>')
+    assert text == 'test'
+    assert entities == [MessageEntityBlockquote(offset=0, length=4, collapsed=None)]
+
+
+def test_unparse_blockquote_collapsed_true_outputs_expandable():
+    text = 'test'
+    entities = [MessageEntityBlockquote(offset=0, length=4, collapsed=True)]
+    assert html.unparse(text, entities) == '<blockquote expandable>test</blockquote>'
+
+
+def test_unparse_blockquote_collapsed_false_outputs_plain():
+    text = 'test'
+    entities = [MessageEntityBlockquote(offset=0, length=4, collapsed=False)]
+    assert html.unparse(text, entities) == '<blockquote>test</blockquote>'
 
 
 def test_link_same_as_text_parses_as_url_entity():

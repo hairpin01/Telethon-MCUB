@@ -1,10 +1,10 @@
 # Telethon-MCUB Changelog
 
-## v1.42.9 (2026-03-04)
+## v1.42.9.post1 (2026-03-04)
 
 ### Release
 
-- Re-release of `1.42.8` changes as `1.42.9` for clean PyPI publication.
+- Post-release of `1.42.9` for PyPI filename reuse constraints.
 - No functional code changes compared to `1.42.8`.
 
 ## v1.42.8 (2026-03-04)
