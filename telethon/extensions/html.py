@@ -227,8 +227,9 @@ ENTITY_TO_FORMATTER = {
     MessageEntitySpoiler: ("<tg-spoiler>", "</tg-spoiler>"),
     MessageEntityBlockquote: _blockquote_formatter,
     MessageEntityPre: lambda e, _: (
-        "<pre>\n" "    <code class='language-{}'>\n" "        ".format(escape(e.language or "")),
-        "{}\n" "    </code>\n" "</pre>",
+        ("<pre><code class='language-{}'>".format(escape(e.language)), "</code></pre>")
+        if e.language
+        else ("<pre><code>", "</code></pre>")
     ),
     MessageEntityEmail: lambda _, t: ('<a href="mailto:{}">'.format(escape(t)), "</a>"),
     MessageEntityUrl: lambda _, t: ('<a href="{}">'.format(escape(del_surrogate(t))), "</a>"),

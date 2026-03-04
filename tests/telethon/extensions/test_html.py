@@ -7,6 +7,7 @@ from telethon.tl.types import (
     MessageEntityBlockquote,
     MessageEntityItalic,
     MessageEntityMentionName,
+    MessageEntityPre,
     MessageEntityTextUrl,
     MessageEntityUrl,
 )
@@ -138,3 +139,15 @@ def test_nested_same_tag_keeps_full_outer_range():
     text, entities = html.parse("<strong>a<strong>b</strong>c</strong>")
     assert text == "abc"
     assert entities == [MessageEntityBold(offset=0, length=3)]
+
+
+def test_unparse_pre_entity_has_no_spurious_braces_or_indentation():
+    text = "pip install -e . --upgrade"
+    entities = [MessageEntityPre(offset=0, length=len(text), language="shell")]
+    assert html.unparse(text, entities) == "<pre><code class='language-shell'>pip install -e . --upgrade</code></pre>"
+
+
+def test_unparse_pre_entity_without_language_has_plain_code_tag():
+    text = "pip install -e . --upgrade"
+    entities = [MessageEntityPre(offset=0, length=len(text), language="")]
+    assert html.unparse(text, entities) == "<pre><code>pip install -e . --upgrade</code></pre>"

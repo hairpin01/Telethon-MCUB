@@ -159,3 +159,57 @@ def test_message_content_is_masked_for_restricted_peer_without_from_id():
 
     assert restricted_message.message == DUMMY_MESSAGE_KWARGS["message"]
     assert restricted_message.reply_markup is None
+
+
+def test_message_text_uses_markdown_formatting():
+    message = Message(
+        id=1,
+        peer_id=PeerChat(chat_id=0),
+        date=None,
+        message="Hello world",
+        entities=[MessageEntityBold(offset=6, length=5)],
+    )
+
+    assert message.text == "Hello **world**"
+
+
+def test_message_html_text_uses_html_formatting():
+    message = Message(
+        id=1,
+        peer_id=PeerChat(chat_id=0),
+        date=None,
+        message="Hello world",
+        entities=[MessageEntityBold(offset=6, length=5)],
+    )
+
+    assert message.html_text == "Hello <strong>world</strong>"
+
+
+def test_message_text_setter_parses_markdown():
+    message = Message(
+        id=1,
+        peer_id=PeerChat(chat_id=0),
+        date=None,
+        message="",
+        entities=[],
+    )
+
+    message.text = "Hello **world**"
+    assert message.message == "Hello world"
+    assert message.text == "Hello **world**"
+    assert message.html_text == "Hello <strong>world</strong>"
+
+
+def test_message_html_text_setter_parses_html():
+    message = Message(
+        id=1,
+        peer_id=PeerChat(chat_id=0),
+        date=None,
+        message="",
+        entities=[],
+    )
+
+    message.html_text = "Hello <strong>world</strong>"
+    assert message.message == "Hello world"
+    assert message.html_text == "Hello <strong>world</strong>"
+    assert message.text == "Hello **world**"

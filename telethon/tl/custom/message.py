@@ -7,6 +7,7 @@ from .forward import Forward
 from .file import File
 from .. import TLObject, types, functions, alltlobjects
 from ... import utils, errors
+from ...extensions import html, markdown
 from ...tl.tlobject import RESTRICT_IDS, DUMMY_MESSAGE_KWARGS
 
 
@@ -281,6 +282,7 @@ class Message(ChatGetter, SenderGetter, TLObject):
         # TODO This is becoming a bit of bloat
         self._client = None
         self._text = None
+        self._html_text = None
         self._file = None
         self._reply_message = None
         self._buttons = None
@@ -401,24 +403,36 @@ class Message(ChatGetter, SenderGetter, TLObject):
     @property
     def text(self):
         """
-        The message text, formatted using the client's default
-        parse mode. Will be `None` for :tl:`MessageService`.
+        The message text formatted as markdown. Will be `None` for
+        :tl:`MessageService`.
         """
-        if self._text is None and self._client:
-            if not self._client.parse_mode:
-                self._text = self.message
-            else:
-                self._text = self._client.parse_mode.unparse(self.message, self.entities)
+        if self._text is None:
+            self._text = markdown.unparse(self.message, self.entities)
 
         return self._text
 
     @text.setter
     def text(self, value):
         self._text = value
-        if self._client and self._client.parse_mode:
-            self.message, self.entities = self._client.parse_mode.parse(value)
-        else:
-            self.message, self.entities = value, []
+        self._html_text = None
+        self.message, self.entities = markdown.parse(value)
+
+    @property
+    def html_text(self):
+        """
+        The message text formatted as HTML. Will be `None` for
+        :tl:`MessageService`.
+        """
+        if self._html_text is None:
+            self._html_text = html.unparse(self.message, self.entities)
+
+        return self._html_text
+
+    @html_text.setter
+    def html_text(self, value):
+        self._html_text = value
+        self._text = None
+        self.message, self.entities = html.parse(value)
 
     @property
     def raw_text(self):
@@ -436,6 +450,7 @@ class Message(ChatGetter, SenderGetter, TLObject):
         self.message = value
         self.entities = []
         self._text = None
+        self._html_text = None
 
     @property
     def is_reply(self):

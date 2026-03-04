@@ -191,9 +191,17 @@ class Album(EventBuilder):
         def text(self):
             """
             The message text of the first photo with a caption,
-            formatted using the client's default parse mode.
+            formatted as markdown.
             """
             return next((m.text for m in self.messages if m.text), "")
+
+        @property
+        def html_text(self):
+            """
+            The message text of the first photo with a caption,
+            formatted as HTML.
+            """
+            return next((m.html_text for m in self.messages if m.html_text), "")
 
         @property
         def raw_text(self):
