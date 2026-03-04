@@ -56,6 +56,18 @@ class HTMLToTelegramParser(HTMLParser):
         self._open_tags = deque()
         self._open_tags_meta = deque()
 
+    @staticmethod
+    def _parse_tg_mention(url):
+        prefix = "tg://user?id="
+        if not url.startswith(prefix):
+            return None
+
+        user_id = url[len(prefix) :]
+        try:
+            return int(user_id)
+        except ValueError:
+            return None
+
     def handle_starttag(self, tag, attrs):
         self._open_tags.appendleft(tag)
         self._open_tags_meta.appendleft(None)
@@ -76,12 +88,16 @@ class HTMLToTelegramParser(HTMLParser):
                 url = url[_MAILTO_LEN:]
                 EntityType = MessageEntityEmail
             else:
-                if self.get_starttag_text() == url:
-                    EntityType = MessageEntityUrl
+                mention_user_id = self._parse_tg_mention(url)
+                if mention_user_id is not None:
+                    EntityType = MessageEntityMentionName
+                    args["user_id"] = mention_user_id
+                    url = None
                 else:
+                    # Start with TextUrl and decide if it can be converted to
+                    # Url when closing the anchor (if visible text equals href).
                     EntityType = MessageEntityTextUrl
                     args["url"] = del_surrogate(url)
-                    url = None
             self._open_tags_meta.popleft()
             self._open_tags_meta.appendleft(url)
         elif tag == "tg-emoji":
@@ -104,25 +120,37 @@ class HTMLToTelegramParser(HTMLParser):
         elif tag == "blockquote":
             if has_expandable:
                 expandable_value = attrs_dict.get("expandable")
-                if expandable_value in ("", None, "true"):
+                if expandable_value is None:
+                    normalized_expandable = ""
+                else:
+                    normalized_expandable = str(expandable_value).strip().lower()
+
+                if normalized_expandable in ("", "true", "1", "yes", "on"):
                     args["collapsed"] = False
                 else:
                     args["collapsed"] = True
             else:
                 args["collapsed"] = None
         elif tag == "code" and "pre" in self._building_entities:
-            pre = self._building_entities["pre"]
+            pre = self._building_entities["pre"]["entity"]
             cls = attrs_dict.get("class", "")
             if cls.startswith("language-"):
                 pre.language = cls[9:]
             EntityType = None
 
-        if EntityType and tag not in self._building_entities:
-            self._building_entities[tag] = EntityType(offset=len(self.text), length=0, **args)
+        if EntityType:
+            state = self._building_entities.get(tag)
+            if state:
+                state["depth"] += 1
+            else:
+                self._building_entities[tag] = {
+                    "entity": EntityType(offset=len(self.text), length=0, **args),
+                    "depth": 1,
+                }
 
     def handle_data(self, text):
-        for tag, entity in self._building_entities.items():
-            entity.length += len(text)
+        for state in self._building_entities.values():
+            state["entity"].length += len(text)
 
         self.text += text
 
@@ -140,9 +168,22 @@ class HTMLToTelegramParser(HTMLParser):
                 del self._open_tags[idx]
                 del self._open_tags_meta[idx]
 
-        entity = self._building_entities.pop(tag, None)
-        if entity:
-            self.entities.append(entity)
+        state = self._building_entities.get(tag)
+        if not state:
+            return
+
+        state["depth"] -= 1
+        if state["depth"] > 0:
+            return
+
+        entity = self._building_entities.pop(tag)["entity"]
+
+        if isinstance(entity, MessageEntityTextUrl):
+            raw = del_surrogate(self.text[entity.offset : entity.offset + entity.length])
+            if raw == entity.url:
+                entity = MessageEntityUrl(offset=entity.offset, length=entity.length)
+
+        self.entities.append(entity)
 
 
 def parse(html: str) -> Tuple[str, List[TypeMessageEntity]]:
@@ -187,7 +228,7 @@ ENTITY_TO_FORMATTER = {
     MessageEntitySpoiler: ("<tg-spoiler>", "</tg-spoiler>"),
     MessageEntityBlockquote: _blockquote_formatter,
     MessageEntityPre: lambda e, _: (
-        "<pre>\n" "    <code class='language-{}'>\n" "        ".format(e.language),
+        "<pre>\n" "    <code class='language-{}'>\n" "        ".format(escape(e.language or "")),
         "{}\n" "    </code>\n" "</pre>",
     ),
     MessageEntityEmail: lambda _, t: ('<a href="mailto:{}">'.format(escape(t)), "</a>"),

@@ -2,7 +2,13 @@
 Tests for `telethon.extensions.html`.
 """
 from telethon.extensions import html
-from telethon.tl.types import MessageEntityBold, MessageEntityItalic, MessageEntityTextUrl
+from telethon.tl.types import (
+    MessageEntityBold,
+    MessageEntityItalic,
+    MessageEntityMentionName,
+    MessageEntityTextUrl,
+    MessageEntityUrl,
+)
 
 
 def test_entity_edges():
@@ -89,3 +95,21 @@ def test_blockquote_expandable_none():
     text, entities = html.parse('<blockquote expandable>test</blockquote>')
     assert text == 'test'
     assert len(entities) == 1
+
+
+def test_link_same_as_text_parses_as_url_entity():
+    text, entities = html.parse('<a href="https://example.com">https://example.com</a>')
+    assert text == "https://example.com"
+    assert entities == [MessageEntityUrl(0, len(text))]
+
+
+def test_tg_user_link_parses_as_mention_name():
+    text, entities = html.parse('<a href="tg://user?id=12345">Alice</a>')
+    assert text == "Alice"
+    assert entities == [MessageEntityMentionName(offset=0, length=5, user_id=12345)]
+
+
+def test_nested_same_tag_keeps_full_outer_range():
+    text, entities = html.parse("<strong>a<strong>b</strong>c</strong>")
+    assert text == "abc"
+    assert entities == [MessageEntityBold(offset=0, length=3)]
