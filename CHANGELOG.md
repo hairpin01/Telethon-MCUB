@@ -4,6 +4,11 @@
 
 ### Performance Improvements
 
+#### TL Serialization Optimization (`telethon/extensions/binaryreader.py`)
+- Added LRU cache (1024 entries) for constructor_id -> class lookup
+- Optimized read() method with local variables
+- Fast-path checks for bool/vector before dictionary lookup
+
 #### Chunk Size Optimization (`telethon/client/telegrambaseclient.py`, `telethon/utils.py`, `telethon/client/downloads.py`, `telethon/client/uploads.py`)
 - Added configurable `max_chunk_size` parameter to `TelegramClient` constructor (default: 512KB)
 - Increased maximum chunk size to 1MB for upload/download operations

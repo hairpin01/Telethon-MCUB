@@ -5,6 +5,7 @@ This module contains the BinaryReader utility class.
 import struct
 import time
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 
 from ..errors import TypeNotFoundError
 from ..tl.alltlobjects import tlobjects
@@ -20,6 +21,12 @@ _FMT_LONG = struct.Struct("<q")
 _FMT_ULONG = struct.Struct("<Q")
 _FMT_FLOAT = struct.Struct("<f")
 _FMT_DOUBLE = struct.Struct("<d")
+
+
+@lru_cache(maxsize=1024)
+def _get_cls_from_id(constructor_id):
+    """Cache for constructor_id -> class lookup."""
+    return tlobjects.get(constructor_id) or core_objects.get(constructor_id)
 
 
 class BinaryReader:
@@ -74,17 +81,17 @@ class BinaryReader:
 
     def read(self, length=-1):
         """Read the given amount of bytes, or -1 to read all remaining."""
+        pos = self.position
         if length >= 0:
-            result = self.stream[self.position : self.position + length]
-            self.position += length
+            result = self.stream[pos:pos + length]
+            self.position = pos + length
         else:
-            result = self.stream[self.position :]
-            self.position += len(result)
+            result = self.stream[pos:]
+            self.position = pos + len(result)
         if (length >= 0) and (len(result) != length):
             raise BufferError(
                 "No more data left to read (need {}, got {}: {}); last read {}".format(
-                    length, len(result), repr(result), repr(self._last)
-                )
+                    length, len(result), repr(result), repr(self._last))
             )
 
         self._last = result
@@ -142,26 +149,24 @@ class BinaryReader:
     def tgread_object(self):
         """Reads a Telegram object."""
         constructor_id = self.read_int(signed=False)
-        clazz = tlobjects.get(constructor_id, None)
-        if clazz is None:
-            # The class was None, but there's still a
-            # chance of it being a manually parsed value like bool!
-            value = constructor_id
-            if value == 0x997275B5:  # boolTrue
-                return True
-            elif value == 0xBC799737:  # boolFalse
-                return False
-            elif value == 0x1CB5C415:  # Vector
-                return [self.tgread_object() for _ in range(self.read_int())]
 
-            clazz = core_objects.get(constructor_id, None)
-            if clazz is None:
-                # If there was still no luck, give up
-                self.seek(-4)  # Go back
-                pos = self.tell_position()
-                error = TypeNotFoundError(constructor_id, self.read())
-                self.set_position(pos)
-                raise error
+        # Fast path: check known bool/vector values first
+        if constructor_id == 0x997275B5:  # boolTrue
+            return True
+        elif constructor_id == 0xBC799737:  # boolFalse
+            return False
+        elif constructor_id == 0x1CB5C415:  # Vector
+            return [self.tgread_object() for _ in range(self.read_int())]
+
+        # Use cached lookup
+        clazz = _get_cls_from_id(constructor_id)
+        if clazz is None:
+            # If there was still no luck, give up
+            self.seek(-4)  # Go back
+            pos = self.tell_position()
+            error = TypeNotFoundError(constructor_id, self.read())
+            self.set_position(pos)
+            raise error
 
         return clazz.from_reader(self)
 
