@@ -278,6 +278,7 @@ class TelegramBaseClient(abc.ABC):
         receive_updates: bool = True,
         catch_up: bool = False,
         entity_cache_limit: int = 5000,
+        max_chunk_size: int = 512 * 1024,
     ):
         if not api_id or not api_hash:
             raise ValueError(
@@ -448,6 +449,7 @@ class TelegramBaseClient(abc.ABC):
             MbEntityCache()
         )  # required for proper update handling (to know when to getDifference)
         self._entity_cache_limit = entity_cache_limit
+        self._max_chunk_size = max_chunk_size
 
         self._sender = MTProtoSender(
             self.session.auth_key,

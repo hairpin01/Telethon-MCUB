@@ -1375,16 +1375,20 @@ def resolve_inline_message_id(inline_msg_id):
         return None, None, None, None
 
 
-def get_appropriated_part_size(file_size):
+def get_appropriated_part_size(file_size, max_chunk_size=512 * 1024):
     """
     Gets the appropriated part size when uploading or downloading files,
     given an initial file size.
+
+    Arguments:
+        file_size: Size of the file in bytes.
+        max_chunk_size: Maximum chunk size in bytes (default 512KB).
     """
     if file_size <= 104857600:  # 100MB
-        return 128
+        return min(128, max_chunk_size)
     if file_size <= 786432000:  # 750MB
-        return 256
-    return 512
+        return min(256, max_chunk_size)
+    return min(512, max_chunk_size)
 
 
 def encode_waveform(waveform):

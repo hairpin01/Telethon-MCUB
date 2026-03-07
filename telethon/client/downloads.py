@@ -22,7 +22,7 @@ if typing.TYPE_CHECKING:
 
 # Chunk sizes for upload.getFile must be multiples of the smallest size
 MIN_CHUNK_SIZE = 4096
-MAX_CHUNK_SIZE = 512 * 1024
+MAX_CHUNK_SIZE = 1024 * 1024  # 1MB
 
 # 2021-01-15, users reported that `errors.TimeoutError` can occur while downloading files.
 TIMED_OUT_SLEEP = 1
@@ -565,7 +565,9 @@ class DownloadMethods:
             if not file_size:
                 part_size_kb = 64  # Reasonable default
             else:
-                part_size_kb = utils.get_appropriated_part_size(file_size)
+                part_size_kb = utils.get_appropriated_part_size(
+                    file_size, self._max_chunk_size
+                )
 
         part_size = int(part_size_kb * 1024)
         if part_size % MIN_CHUNK_SIZE != 0:
@@ -770,8 +772,8 @@ class DownloadMethods:
         request_size -= request_size % MIN_CHUNK_SIZE
         if request_size < MIN_CHUNK_SIZE:
             request_size = MIN_CHUNK_SIZE
-        elif request_size > MAX_CHUNK_SIZE:
-            request_size = MAX_CHUNK_SIZE
+        elif request_size > self._max_chunk_size:
+            request_size = self._max_chunk_size
 
         if (
             chunk_size == request_size

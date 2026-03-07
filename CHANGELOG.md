@@ -1,5 +1,39 @@
 # Telethon-MCUB Changelog
 
+## v1.42.9.post11 (2026-03-07)
+
+### Performance Improvements
+
+#### Chunk Size Optimization (`telethon/client/telegrambaseclient.py`, `telethon/utils.py`, `telethon/client/downloads.py`, `telethon/client/uploads.py`)
+- Added configurable `max_chunk_size` parameter to `TelegramClient` constructor (default: 512KB)
+- Increased maximum chunk size to 1MB for upload/download operations
+- New `get_appropriated_part_size()` now accepts `max_chunk_size` parameter
+- Backward compatible: existing code works without changes
+
+Usage:
+```python
+# Default 512KB (backward compatible)
+client = TelegramClient(session, api_id, api_hash)
+
+# Custom chunk size
+client = TelegramClient(session, api_id, api_hash, max_chunk_size=1024*1024)  # 1MB
+
+# Override per file
+await client.download_file(media, part_size_kb=512)
+await client.upload_file(file, part_size_kb=512)
+```
+
+#### uvloop Support (`telethon/__init__.py`)
+- Added `install_uvloop()` function for easy uvloop integration
+- Works on Unix-like systems (Linux, macOS)
+- Returns `False` on Windows or if uvloop is not installed
+
+Usage:
+```python
+import telethon
+telethon.install_uvloop()
+```
+
 ## v1.42.9.post6 (2026-03-04)
 
 ### Security / Protection
