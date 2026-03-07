@@ -1,6 +1,6 @@
 # Telethon-MCUB Changelog
 
-## v1.42.9.post11 (2026-03-07)
+## v1.42.10 (2026-03-07)
 
 ### Performance Improvements
 
