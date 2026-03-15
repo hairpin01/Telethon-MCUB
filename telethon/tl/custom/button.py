@@ -2,6 +2,26 @@ from .. import types
 from ... import utils
 
 
+def _parse_style(style):
+    """
+    Converts a style string into a KeyboardButtonStyle object.
+
+    Valid values: 'primary' (blue), 'success' (green), 'danger' (red).
+    Returns None if style is None.
+    """
+    if style is None:
+        return None
+    style = style.lower()
+    if style == "primary":
+        return types.KeyboardButtonStyle(bg_primary=True)
+    elif style == "success":
+        return types.KeyboardButtonStyle(bg_success=True)
+    elif style == "danger":
+        return types.KeyboardButtonStyle(bg_danger=True)
+    else:
+        raise ValueError(f"Unknown style '{style}'. Use: 'primary', 'success', 'danger'")
+
+
 class Button:
     """
     .. note::
@@ -36,6 +56,10 @@ class Button:
     If more characters are given, Telegram will cut the text
     to 128 characters and add the ellipsis (…) character as
     the 129.
+
+    Most button methods accept a ``style`` keyword argument that sets the
+    button color. Valid values are ``'primary'`` (blue), ``'success'`` (green),
+    and ``'danger'`` (red). Requires Telegram 12.4+.
     """
 
     def __init__(self, button, *, resize, single_use, selective, persistent, placeholder):
@@ -66,7 +90,7 @@ class Button:
         )
 
     @staticmethod
-    def inline(text, data=None):
+    def inline(text, data=None, *, style=None):
         """
         Creates a new inline button with some payload data in it.
 
@@ -82,6 +106,10 @@ class Button:
         <telethon.events.callbackquery.CallbackQuery>` will trigger with the
         same data that the button contained, so that you can determine which
         button was pressed.
+
+        Args:
+            style (`str`, optional):
+                Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
         """
         if not data:
             data = text.encode("utf-8")
@@ -91,10 +119,10 @@ class Button:
         if len(data) > 64:
             raise ValueError("Too many bytes for the data")
 
-        return types.KeyboardButtonCallback(text, data)
+        return types.KeyboardButtonCallback(text, data, style=_parse_style(style))
 
     @staticmethod
-    def switch_inline(text, query="", same_peer=False):
+    def switch_inline(text, query="", same_peer=False, *, style=None):
         """
         Creates a new inline button to switch to inline query.
 
@@ -108,11 +136,15 @@ class Button:
         When the user clicks this button, after a chat is selected, their
         input field will be filled with the username of your bot followed
         by the query text, ready to make inline queries.
+
+        Args:
+            style (`str`, optional):
+                Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
         """
-        return types.KeyboardButtonSwitchInline(text, query, same_peer)
+        return types.KeyboardButtonSwitchInline(text, query, same_peer, style=_parse_style(style))
 
     @staticmethod
-    def url(text, url=None):
+    def url(text, url=None, *, style=None):
         """
         Creates a new inline button to open the desired URL on click.
 
@@ -124,11 +156,15 @@ class Button:
         to the user asking whether they want to open the displayed URL unless
         the domain is trusted, and once confirmed the URL will open in their
         device.
+
+        Args:
+            style (`str`, optional):
+                Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
         """
-        return types.KeyboardButtonUrl(text, url or text)
+        return types.KeyboardButtonUrl(text, url or text, style=_parse_style(style))
 
     @staticmethod
-    def auth(text, url=None, *, bot=None, write_access=False, fwd_text=None):
+    def auth(text, url=None, *, bot=None, write_access=False, fwd_text=None, style=None):
         """
         Creates a new inline button to authorize the user at the given URL.
 
@@ -162,6 +198,9 @@ class Button:
                 The new text to show in the button if the message is
                 forwarded. By default, the button text will be the same.
 
+            style (`str`, optional):
+                Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
+
         When the user clicks this button, a confirmation box will be shown
         to the user asking whether they want to login to the specified domain.
         """
@@ -171,6 +210,7 @@ class Button:
             bot=utils.get_input_user(bot or types.InputUserSelf()),
             request_write_access=write_access,
             fwd_text=fwd_text,
+            style=_parse_style(style),
         )
 
     @classmethod
@@ -183,6 +223,7 @@ class Button:
         selective=None,
         persistent=None,
         placeholder=None,
+        style=None,
     ):
         """
         Creates a new keyboard button with the given text.
@@ -214,6 +255,9 @@ class Button:
                 The placeholder to be shown in the input field when the keyboard is active;
                 1-64 characters
 
+            style (`str`, optional):
+                Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
+
         When the user clicks this button, a text message with the same text
         as the button will be sent, and can be handled with `events.NewMessage
         <telethon.events.newmessage.NewMessage>`. You cannot distinguish
@@ -221,7 +265,7 @@ class Button:
         same text on their own.
         """
         return cls(
-            types.KeyboardButton(text),
+            types.KeyboardButton(text, style=_parse_style(style)),
             resize=resize,
             single_use=single_use,
             selective=selective,
@@ -239,6 +283,7 @@ class Button:
         selective=None,
         persistent=None,
         placeholder=None,
+        style=None,
     ):
         """
         Creates a new keyboard button to request the user's location on click.
@@ -246,12 +291,16 @@ class Button:
         ``resize``, ``single_use``, ``selective``, ``persistent`` and ``placeholder``
          are documented in `text`.
 
+        Args:
+            style (`str`, optional):
+                Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
+
         When the user clicks this button, a confirmation box will be shown
         to the user asking whether they want to share their location with the
         bot, and if confirmed a message with geo media will be sent.
         """
         return cls(
-            types.KeyboardButtonRequestGeoLocation(text),
+            types.KeyboardButtonRequestGeoLocation(text, style=_parse_style(style)),
             resize=resize,
             single_use=single_use,
             selective=selective,
@@ -269,6 +318,7 @@ class Button:
         selective=None,
         persistent=None,
         placeholder=None,
+        style=None,
     ):
         """
         Creates a new keyboard button to request the user's phone on click.
@@ -276,12 +326,16 @@ class Button:
         ``resize``, ``single_use``, ``selective``, ``persistent`` and ``placeholder``
          are documented in `text`.
 
+        Args:
+            style (`str`, optional):
+                Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
+
         When the user clicks this button, a confirmation box will be shown
         to the user asking whether they want to share their phone with the
         bot, and if confirmed a message with contact media will be sent.
         """
         return cls(
-            types.KeyboardButtonRequestPhone(text),
+            types.KeyboardButtonRequestPhone(text, style=_parse_style(style)),
             resize=resize,
             single_use=single_use,
             selective=selective,
@@ -300,6 +354,7 @@ class Button:
         selective=None,
         persistent=None,
         placeholder=None,
+        style=None,
     ):
         """
         Creates a new keyboard button to request the user to create a poll.
@@ -315,11 +370,15 @@ class Button:
         ``resize``, ``single_use``, ``selective``, ``persistent`` and ``placeholder``
          are documented in `text`.
 
+        Args:
+            style (`str`, optional):
+                Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
+
         When the user clicks this button, a screen letting the user create a
         poll will be shown, and if they do create one, the poll will be sent.
         """
         return cls(
-            types.KeyboardButtonRequestPoll(text, quiz=force_quiz),
+            types.KeyboardButtonRequestPoll(text, quiz=force_quiz, style=_parse_style(style)),
             resize=resize,
             single_use=single_use,
             selective=selective,
@@ -352,7 +411,7 @@ class Button:
         )
 
     @staticmethod
-    def buy(text):
+    def buy(text, *, style=None):
         """
         Creates a new inline button to buy a product.
 
@@ -363,11 +422,15 @@ class Button:
         add the button to the message. See the
         `Payments API <https://core.telegram.org/api/payments>`__
         documentation for more information.
+
+        Args:
+            style (`str`, optional):
+                Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
         """
-        return types.KeyboardButtonBuy(text)
+        return types.KeyboardButtonBuy(text, style=_parse_style(style))
 
     @staticmethod
-    def game(text):
+    def game(text, *, style=None):
         """
         Creates a new inline button to start playing a game.
 
@@ -377,5 +440,9 @@ class Button:
         See the
         `Games <https://core.telegram.org/api/bots/games>`__
         documentation for more information on using games.
+
+        Args:
+            style (`str`, optional):
+                Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
         """
-        return types.KeyboardButtonGame(text)
+        return types.KeyboardButtonGame(text, style=_parse_style(style))

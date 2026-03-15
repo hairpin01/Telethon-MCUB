@@ -42,7 +42,7 @@ DANGEROUS_REQUESTS: tuple[type[TLRequest], ...] = (
     ResetAuthorizationsRequest,      # terminate ALL other sessions
     ResetWebAuthorizationsRequest,   # terminate all web (widget) sessions
     BindTempAuthKeyRequest,          # bind temporary auth key
-    ExportAuthorizationRequest,      # export auth to another DC
+    # ExportAuthorizationRequest,    # export auth to another DC
     ImportAuthorizationRequest,      # import exported auth bytes
     ImportBotAuthorizationRequest,   # hijack via bot token
     # ExportLoginTokenRequest,         # QR-login token export
