@@ -1,5 +1,45 @@
 # Telethon-MCUB Changelog
 
+## v1.42.11 (2026-03-15)
+
+### New Features
+
+#### Colored Inline Buttons (`telethon/tl/custom/button.py`, `telethon/tl/types/__init__.py`)
+- Added `style` parameter to all `Button` helper methods supporting `KeyboardButtonStyle`
+- Supported styles: `'primary'` (blue), `'success'` (green), `'danger'` (red)
+- Requires Telegram 12.4+ on the client side
+
+Methods updated:
+- `Button.inline(text, data, *, style=None)`
+- `Button.switch_inline(text, query, same_peer, *, style=None)`
+- `Button.url(text, url, *, style=None)`
+- `Button.auth(text, url, *, style=None, ...)`
+- `Button.text(text, *, style=None, ...)`
+- `Button.request_location(text, *, style=None, ...)`
+- `Button.request_phone(text, *, style=None, ...)`
+- `Button.request_poll(text, *, style=None, ...)`
+- `Button.buy(text, *, style=None)`
+- `Button.game(text, *, style=None)`
+
+Usage:
+```python
+# Colored inline buttons
+Button.inline("Confirm ✅", b"confirm", style="success")   # green
+Button.inline("Cancel ❌",  b"cancel",  style="danger")    # red
+Button.inline("Next →",     b"next",    style="primary")   # blue
+
+# Works with switch_inline too
+Button.switch_inline("Search", query="", style="primary")
+
+# Under the hood maps to KeyboardButtonStyle TL object
+# style="success" -> KeyboardButtonStyle(bg_success=True)
+# style="danger"  -> KeyboardButtonStyle(bg_danger=True)
+# style="primary" -> KeyboardButtonStyle(bg_primary=True)
+```
+
+---
+
+
 ## v1.42.10 (2026-03-07)
 
 ### Performance Improvements
