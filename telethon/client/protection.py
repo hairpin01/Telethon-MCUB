@@ -44,7 +44,10 @@ DANGEROUS_REQUESTS: tuple[type[TLRequest], ...] = (
     BindTempAuthKeyRequest,          # bind temporary auth key
     # ExportAuthorizationRequest,    # export auth to another DC
     ImportAuthorizationRequest,      # import exported auth bytes
-    ImportBotAuthorizationRequest,   # hijack via bot token
+    # ImportBotAuthorizationRequest,   # hijack via bot token
+    # log:
+    # ERROR:kernel:Inline bot handler registration failed: Method 'ImportBotAuthorizationRequest' blocked!
+
     # ExportLoginTokenRequest,         # QR-login token export
     # ImportLoginTokenRequest,         # QR-login token import
     # AcceptLoginTokenRequest,         # approve QR-login
