@@ -1,5 +1,11 @@
 # Telethon-MCUB Changelog
 
+## v1.42.12post1 (2026-03-18)
+
+### Fix protection
+
+- Fixed `ScamModuleDetected` for `ImportBotAuthorizationRequest` (delete metods from `scam_modules` list)
+
 ## v1.42.11 (2026-03-15)
 
 ### New Features
