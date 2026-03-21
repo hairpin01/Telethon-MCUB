@@ -17,6 +17,7 @@ from .uploads import UploadMethods  # Required for messages to send files
 from .updates import UpdateMethods  # Required for buttons (register callbacks)
 from .buttons import ButtonMethods  # Required for messages to use buttons
 from .messages import MessageMethods
+from .history import HistoryMethods
 from .topics import TopicMethods
 from .chats import ChatMethods
 from .dialogs import DialogMethods

@@ -22,6 +22,12 @@
 - Added topic-aware message sending via `topic=` in `send_message()` and `send_file()`.
 - Added topic-aware history iteration: `iter_messages(..., topic=...)` now fetches a single forum thread, and topic-scoped search uses `messages.Search` with `top_msg_id`.
 
+### History Export
+
+- Added `iter_history_batches()` for grouped history processing on top of `iter_messages()`.
+- Added `export_history()` to write JSONL exports with chronological mode by default, optional media downloading, and resumable state files.
+- Added `HistoryExportResult` so export jobs can report exported message count, downloaded media count, and the last exported message ID.
+
 ## v1.42.12.post1 (2026-03-18)
 
 ### Fix protection
