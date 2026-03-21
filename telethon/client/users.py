@@ -16,6 +16,7 @@ from .protection import (
     build_protection_policy,
     check_request_safety,
 )
+from .middleware import RequestContext
 
 _NOT_A_REQUEST = lambda: TypeError("You can only invoke requests, not types!")
 
@@ -62,6 +63,16 @@ class UserMethods:
     def clear_blocked_request_handler(self: "TelegramClient") -> None:
         self._on_blocked_request = None
 
+    def add_request_middleware(self: "TelegramClient", func):
+        self._request_middleware.add(func)
+        return func
+
+    def remove_request_middleware(self: "TelegramClient", func) -> None:
+        self._request_middleware.remove(func)
+
+    def request_middleware(self: "TelegramClient", func):
+        return self.add_request_middleware(func)
+
     async def _handle_protection_violation(
         self: "TelegramClient", violation: ProtectionViolation
     ) -> None:
@@ -84,17 +95,14 @@ class UserMethods:
             flood_sleep_threshold=flood_sleep_threshold,
         )
 
-    async def _call(
-        self: "TelegramClient", sender, request, ordered=False, flood_sleep_threshold=None
+    async def _normalize_request_payload(
+        self: "TelegramClient",
+        request,
+        *,
+        flood_sleep_threshold=None,
+        validate_only: bool = False,
+        report_violations: bool = True,
     ):
-        if self._loop is not None and self._loop != helpers.get_running_loop():
-            raise RuntimeError(
-                "The asyncio event loop must not change after connection (see the FAQ for details)"
-            )
-        # if the loop is None it will fail with a connection error later on
-
-        if flood_sleep_threshold is None:
-            flood_sleep_threshold = self.flood_sleep_threshold
         is_list_like_request = utils.is_list_like(request)
         if is_list_like_request:
             requests = list(request)
@@ -108,15 +116,20 @@ class UserMethods:
 
             violation = check_request_safety(r, self._protection_policy)
             if violation is not None:
-                await self._handle_protection_violation(violation)
+                if report_violations:
+                    await self._handle_protection_violation(violation)
+                elif violation.policy.should_block:
+                    raise ScamModuleDetected(violation.message)
+
+            if validate_only:
+                continue
 
             await r.resolve(self, utils)
 
-            # Avoid making the request if it's already in a flood wait
             if r.CONSTRUCTOR_ID in self._flood_waited_requests:
                 due = self._flood_waited_requests[r.CONSTRUCTOR_ID]
                 diff = round(due - time.time())
-                if diff <= 3:  # Flood waits below 3 seconds are "ignored"
+                if diff <= 3:
                     self._flood_waited_requests.pop(r.CONSTRUCTOR_ID, None)
                 elif diff <= flood_sleep_threshold:
                     self._log[__name__].info(*_fmt_flood(diff, r, early=True))
@@ -126,41 +139,80 @@ class UserMethods:
                     raise errors.FloodWaitError(request=r, capture=diff)
 
             if self._no_updates:
+                wrapped = functions.InvokeWithoutUpdatesRequest(r)
                 if is_list_like_request:
-                    request[i] = functions.InvokeWithoutUpdatesRequest(r)
+                    request[i] = wrapped
                 else:
-                    # This should only run once as requests should be a list of 1 item
-                    request = functions.InvokeWithoutUpdatesRequest(r)
+                    request = wrapped
+
+        return request, requests, is_list_like_request
+
+    async def _call(
+        self: "TelegramClient", sender, request, ordered=False, flood_sleep_threshold=None
+    ):
+        if self._loop is not None and self._loop != helpers.get_running_loop():
+            raise RuntimeError(
+                "The asyncio event loop must not change after connection (see the FAQ for details)"
+            )
+        # if the loop is None it will fail with a connection error later on
+
+        if flood_sleep_threshold is None:
+            flood_sleep_threshold = self.flood_sleep_threshold
+        request, requests, is_list_like_request = await self._normalize_request_payload(
+            request, validate_only=True, report_violations=False
+        )
+        original_request = list(requests) if is_list_like_request else requests[0]
 
         request_index = 0
         last_error = None
-        self._last_request = time.time()
+        started_at = time.time()
+        self._last_request = started_at
+
+        async def _invoke_request(current_request, context: RequestContext):
+            nonlocal request_index
+
+            current_request, _, _ = await self._normalize_request_payload(
+                current_request,
+                flood_sleep_threshold=context.flood_sleep_threshold,
+            )
+            context.request = current_request
+
+            future = sender.send(current_request, ordered=context.ordered)
+            if isinstance(future, list):
+                results = []
+                exceptions = []
+                for f in future:
+                    try:
+                        result = await f
+                    except RPCError as e:
+                        exceptions.append(e)
+                        results.append(None)
+                        continue
+                    await utils.maybe_async(self.session.process_entities(result))
+                    exceptions.append(None)
+                    results.append(result)
+                    request_index += 1
+                if any(x is not None for x in exceptions):
+                    raise MultiError(exceptions, results, requests)
+                return results
+
+            result = await future
+            await utils.maybe_async(self.session.process_entities(result))
+            return result
 
         for attempt in retry_range(self._request_retries):
+            context = RequestContext(
+                sender=sender,
+                ordered=ordered,
+                flood_sleep_threshold=flood_sleep_threshold,
+                started_at=started_at,
+                attempt=attempt,
+                is_batch=is_list_like_request,
+                original_request=original_request,
+                request=request,
+            )
             try:
-                future = sender.send(request, ordered=ordered)
-                if isinstance(future, list):
-                    results = []
-                    exceptions = []
-                    for f in future:
-                        try:
-                            result = await f
-                        except RPCError as e:
-                            exceptions.append(e)
-                            results.append(None)
-                            continue
-                        await utils.maybe_async(self.session.process_entities(result))
-                        exceptions.append(None)
-                        results.append(result)
-                        request_index += 1
-                    if any(x is not None for x in exceptions):
-                        raise MultiError(exceptions, results, requests)
-                    else:
-                        return results
-                else:
-                    result = await future
-                    await utils.maybe_async(self.session.process_entities(result))
-                    return result
+                return await self._request_middleware.process(request, context, _invoke_request)
             except (
                 errors.ServerError,
                 errors.RpcCallFailError,
@@ -182,12 +234,15 @@ class UserMethods:
                 errors.FloodTestPhoneWaitError,
             ) as e:
                 last_error = e
-                if utils.is_list_like(request):
-                    request = request[request_index]
+                current_request = context.request
+                if utils.is_list_like(current_request):
+                    current_request = current_request[request_index]
 
                 # SLOW_MODE_WAIT is chat-specific, not request-specific
                 if not isinstance(e, errors.SlowModeWaitError):
-                    self._flood_waited_requests[request.CONSTRUCTOR_ID] = time.time() + e.seconds
+                    self._flood_waited_requests[current_request.CONSTRUCTOR_ID] = (
+                        time.time() + e.seconds
+                    )
 
                 # In test servers, FLOOD_WAIT_0 has been observed, and sleeping for
                 # such a short amount will cause retries very fast leading to issues.
@@ -195,7 +250,7 @@ class UserMethods:
                     e.seconds = 1
 
                 if e.seconds <= self.flood_sleep_threshold:
-                    self._log[__name__].info(*_fmt_flood(e.seconds, request))
+                    self._log[__name__].info(*_fmt_flood(e.seconds, current_request))
                     await asyncio.sleep(e.seconds)
                 else:
                     raise

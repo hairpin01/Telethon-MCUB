@@ -416,9 +416,10 @@ class TelegramBaseClient(abc.ABC):
         self._event_builders_by_type = {}  # type -> list of (builder, callback)
 
         # Middleware manager for event handlers
-        from .middleware import MiddlewareManager
+        from .middleware import MiddlewareManager, RequestMiddlewareManager
 
         self._middleware = MiddlewareManager()
+        self._request_middleware = RequestMiddlewareManager()
 
         # {chat_id: {Conversation}}
         self._conversations = collections.defaultdict(set)

@@ -186,6 +186,13 @@ class UpdateMethods:
         self._event_builders.append((event, callback))
         self._event_builders_by_type.setdefault(type(event), []).append((event, callback))
 
+    def add_event_middleware(self, func):
+        self._middleware.add(func)
+        return func
+
+    def remove_event_middleware(self, func) -> None:
+        self._middleware.remove(func)
+
     def middleware(self, func):
         """
         Register a middleware that runs before every event handler.
@@ -203,8 +210,7 @@ class UpdateMethods:
                     return  # drop, handler never runs
                 await next()
         """
-        self._middleware.add(func)
-        return func
+        return self.add_event_middleware(func)
 
     def remove_event_handler(
         self: "TelegramClient", callback: Callback, event: EventBuilder = None

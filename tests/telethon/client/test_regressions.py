@@ -31,9 +31,11 @@ class _FailSender:
 class _EchoSender:
     def __init__(self):
         self.last_request = None
+        self.last_ordered = None
 
     def send(self, request, ordered=False):
         self.last_request = request
+        self.last_ordered = ordered
 
         async def _ok():
             return []
@@ -241,6 +243,79 @@ async def test_generator_requests_are_not_dropped():
     assert isinstance(sender.last_request, list)
     assert len(sender.last_request) == 1
     assert len(result) == 1
+
+
+@pytest.mark.asyncio
+async def test_request_middleware_can_short_circuit_call():
+    client = TelegramClient(None, 1, "1")
+    sender = _FailSender()
+    seen = []
+
+    @client.request_middleware
+    async def _middleware(request, ctx, next):
+        seen.append(
+            (
+                request.__class__,
+                ctx.attempt,
+                ctx.ordered,
+                ctx.flood_sleep_threshold,
+                ctx.is_batch,
+                ctx.original_request.__class__,
+            )
+        )
+        return "short-circuit"
+
+    result = await client._call(
+        sender,
+        functions.help.GetConfigRequest(),
+        ordered=True,
+        flood_sleep_threshold=17,
+    )
+
+    assert result == "short-circuit"
+    assert seen == [(functions.help.GetConfigRequest, 1, True, 17, False, functions.help.GetConfigRequest)]
+
+
+@pytest.mark.asyncio
+async def test_request_middleware_wraps_sender_send():
+    client = TelegramClient(None, 1, "1")
+    sender = _EchoSender()
+    calls = []
+
+    async def first(request, ctx, next):
+        calls.append(("first-before", ctx.attempt, ctx.is_batch))
+        result = await next()
+        calls.append(("first-after", ctx.attempt, ctx.is_batch))
+        return result
+
+    async def second(request, ctx, next):
+        calls.append(("second-before", ctx.attempt, ctx.is_batch))
+        result = await next()
+        calls.append(("second-after", ctx.attempt, ctx.is_batch))
+        return result
+
+    client.add_request_middleware(first)
+    client.add_request_middleware(second)
+    result = await client._call(sender, [functions.help.GetConfigRequest()], ordered=True)
+
+    assert result == [[]]
+    assert calls == [
+        ("first-before", 1, True),
+        ("second-before", 1, True),
+        ("second-after", 1, True),
+        ("first-after", 1, True),
+    ]
+    assert sender.last_ordered is True
+    assert isinstance(sender.last_request, list)
+    assert len(sender.last_request) == 1
+
+    client.remove_request_middleware(second)
+    calls.clear()
+    await client._call(sender, functions.help.GetConfigRequest())
+    assert calls == [
+        ("first-before", 1, False),
+        ("first-after", 1, False),
+    ]
 
 
 @pytest.mark.asyncio

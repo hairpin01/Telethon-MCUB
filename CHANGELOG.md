@@ -28,6 +28,12 @@
 - Added `export_history()` to write JSONL exports with chronological mode by default, optional media downloading, and resumable state files.
 - Added `HistoryExportResult` so export jobs can report exported message count, downloaded media count, and the last exported message ID.
 
+### Middleware
+
+- Added request middleware support around `TelegramClient.__call__()` via `add_request_middleware()`, `remove_request_middleware()`, and `request_middleware()`.
+- Added `RequestContext` metadata for middleware chains, including `attempt`, `ordered`, `flood_sleep_threshold`, `started_at`, `sender`, and batch/original request information.
+- Added explicit `add_event_middleware()` and `remove_event_middleware()` helpers while keeping `client.middleware(...)` as a backward-compatible decorator alias.
+
 ## v1.42.12.post1 (2026-03-18)
 
 ### Fix protection
