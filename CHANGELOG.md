@@ -16,6 +16,12 @@
 - Added client-side protection controls: `protection_mode`, `get_protection_policy()`, `set_protection_policy()`, `set_protection_mode()`, `on_blocked_request()`, and `clear_blocked_request_handler()`.
 - Added `dry_run` and allowlist overrides so blocked requests can be observed without being rejected.
 
+### Forum Topics
+
+- Added high-level topic helpers: `iter_topics()`, `get_topics()`, `get_topic()`, `create_topic()`, `edit_topic()`, `close_topic()`, `reopen_topic()`, `delete_topic_history()`, `pin_topic()`, `reorder_topics()`, `iter_topic_messages()`, `send_to_topic()`, and `send_file_to_topic()`.
+- Added topic-aware message sending via `topic=` in `send_message()` and `send_file()`.
+- Added topic-aware history iteration: `iter_messages(..., topic=...)` now fetches a single forum thread, and topic-scoped search uses `messages.Search` with `top_msg_id`.
+
 ## v1.42.12.post1 (2026-03-18)
 
 ### Fix protection

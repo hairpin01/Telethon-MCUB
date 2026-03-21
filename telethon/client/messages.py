@@ -7,6 +7,7 @@ from .. import helpers, utils, errors, hints
 from ..requestiter import RequestIter
 from ..tl import types, functions
 from ..tl.tlobject import RESTRICT_IDS
+from .topics import build_topic_reply_to, get_topic_top_message
 
 _MAX_CHUNK_SIZE = 100
 
@@ -31,6 +32,7 @@ class _MessagesIter(RequestIter):
         filter,
         search,
         reply_to,
+        topic,
         scheduled,
     ):
         # Note that entity being `None` will perform a global search.
@@ -79,6 +81,15 @@ class _MessagesIter(RequestIter):
         # a normal `messages.search`, *but* we can make the entity be `inputPeerEmpty`.
         if not self.entity and from_user:
             self.entity = types.InputPeerEmpty()
+
+        if topic is not None:
+            if not self.entity:
+                raise ValueError("topic requires a concrete entity")
+            if reply_to is not None:
+                raise ValueError("topic and reply_to cannot be used together")
+            if scheduled:
+                raise ValueError("topic and scheduled cannot be used together")
+            topic = get_topic_top_message(topic)
 
         if filter is None:
             filter = types.InputMessagesFilterEmpty()
@@ -139,6 +150,7 @@ class _MessagesIter(RequestIter):
                 min_id=0,
                 hash=0,
                 from_id=from_user,
+                top_msg_id=topic,
             )
 
             # Workaround issue #1124 until a better solution is found.
@@ -156,6 +168,18 @@ class _MessagesIter(RequestIter):
             ):
                 async for m in self.client.iter_messages(self.entity, 1, offset_date=offset_date):
                     self.request.offset_id = m.id + 1
+        elif topic is not None:
+            self.request = functions.messages.GetRepliesRequest(
+                peer=self.entity,
+                msg_id=topic,
+                offset_id=offset_id,
+                offset_date=offset_date,
+                add_offset=add_offset,
+                limit=1,
+                max_id=0,
+                min_id=0,
+                hash=0,
+            )
         else:
             self.request = functions.messages.GetHistoryRequest(
                 peer=self.entity,
@@ -375,6 +399,7 @@ class MessageMethods:
         ids: "typing.Union[int, typing.Sequence[int]]" = None,
         reverse: bool = False,
         reply_to: int = None,
+        topic: "typing.Union[int, types.TypeForumTopic]" = None,
         scheduled: bool = False,
     ) -> "typing.Union[_MessagesIter, _IDsIter]":
         """
@@ -536,6 +561,10 @@ class MessageMethods:
                 # Getting comments from a post in a channel:
                 async for message in client.iter_messages(channel, reply_to=123):
                     print(message.chat.title, message.text)
+
+                # Iterate only one forum topic thread
+                async for message in client.iter_messages(channel, topic=topic):
+                    print(message.id, message.text)
         """
         if ids is not None:
             if not utils.is_list_like(ids):
@@ -565,6 +594,7 @@ class MessageMethods:
             filter=filter,
             search=search,
             reply_to=reply_to,
+            topic=topic,
             scheduled=scheduled,
         )
 
@@ -645,6 +675,7 @@ class MessageMethods:
         message: "hints.MessageLike" = "",
         *,
         reply_to: "typing.Union[int, types.Message]" = None,
+        topic: "typing.Union[int, types.TypeForumTopic]" = None,
         attributes: "typing.Sequence[types.TypeDocumentAttribute]" = None,
         parse_mode: typing.Optional[str] = (),
         formatting_entities: typing.Optional[typing.List[types.TypeMessageEntity]] = None,
@@ -862,6 +893,7 @@ class MessageMethods:
                 file,
                 caption=message,
                 reply_to=reply_to,
+                topic=topic,
                 attributes=attributes,
                 parse_mode=parse_mode,
                 force_document=force_document,
@@ -902,6 +934,7 @@ class MessageMethods:
                     silent=silent,
                     background=background,
                     reply_to=reply_to,
+                    topic=topic,
                     buttons=markup,
                     formatting_entities=message.entities,
                     parse_mode=None,  # explicitly disable parse_mode to force using even empty formatting_entities
@@ -915,7 +948,7 @@ class MessageMethods:
                 message=message.message or "",
                 silent=silent,
                 background=background,
-                reply_to=None if reply_to is None else types.InputReplyToMessage(reply_to),
+                reply_to=build_topic_reply_to(reply_to=reply_to, topic=topic),
                 reply_markup=markup,
                 entities=message.entities,
                 clear_draft=clear_draft,
@@ -936,7 +969,7 @@ class MessageMethods:
                 message=message,
                 entities=formatting_entities,
                 no_webpage=not link_preview,
-                reply_to=None if reply_to is None else types.InputReplyToMessage(reply_to),
+                reply_to=build_topic_reply_to(reply_to=reply_to, topic=topic),
                 clear_draft=clear_draft,
                 silent=silent,
                 background=background,

@@ -13,6 +13,7 @@ from ..crypto import AES
 
 from .. import utils, helpers, hints
 from ..tl import types, functions, custom
+from .topics import build_topic_reply_to
 
 try:
     import PIL
@@ -122,6 +123,7 @@ class UploadMethods:
         clear_draft: bool = False,
         progress_callback: "hints.ProgressCallback" = None,
         reply_to: "hints.MessageIDLike" = None,
+        topic: "typing.Union[int, types.TypeForumTopic]" = None,
         attributes: "typing.Sequence[types.TypeDocumentAttribute]" = None,
         thumb: "hints.FileLike" = None,
         allow_cache: bool = True,
@@ -452,6 +454,7 @@ class UploadMethods:
                     formatting_entities=formatting_entities[:10],
                     progress_callback=used_callback,
                     reply_to=reply_to,
+                    topic=topic,
                     parse_mode=parse_mode,
                     silent=silent,
                     schedule=schedule,
@@ -495,7 +498,7 @@ class UploadMethods:
             raise TypeError("Cannot use {!r} as file".format(file))
 
         markup = self.build_reply_markup(buttons)
-        reply_to = None if reply_to is None else types.InputReplyToMessage(reply_to)
+        reply_to = build_topic_reply_to(reply_to=reply_to, topic=topic)
         request = functions.messages.SendMediaRequest(
             entity,
             media,
@@ -520,6 +523,7 @@ class UploadMethods:
         formatting_entities=None,
         progress_callback=None,
         reply_to=None,
+        topic=None,
         parse_mode=(),
         silent=None,
         schedule=None,
@@ -615,7 +619,7 @@ class UploadMethods:
         # Now we can construct the multi-media request
         request = functions.messages.SendMultiMediaRequest(
             entity,
-            reply_to=None if reply_to is None else types.InputReplyToMessage(reply_to),
+            reply_to=build_topic_reply_to(reply_to=reply_to, topic=topic),
             multi_media=media,
             silent=silent,
             schedule_date=schedule,

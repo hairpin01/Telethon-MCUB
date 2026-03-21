@@ -76,7 +76,7 @@ class TestMessageMethods:
             mock_obj.assert_called_once_with(
                 entity, media_file, caption=message.message,
                 formatting_entities=formatting_entities or message.entities,
-                reply_to=None, silent=None, attributes=None, parse_mode=(),
+                reply_to=None, topic=None, silent=None, attributes=None, parse_mode=(),
                 force_document=False, thumb=None, buttons=None,
                 clear_draft=False, schedule=None, supports_streaming=False,
                 comment_to=None, background=None, nosound_video=None,
