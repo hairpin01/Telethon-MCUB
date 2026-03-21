@@ -1,5 +1,7 @@
 import datetime
+import hashlib
 import io
+import json
 import os
 import pathlib
 import typing
@@ -11,6 +13,7 @@ from ..crypto import AES
 from .. import utils, helpers, errors, hints
 from ..requestiter import RequestIter
 from ..tl import TLObject, types, functions
+from .transfers import FileTransferState, JsonTransferStateStore
 
 try:
     import aiohttp
@@ -26,6 +29,35 @@ MAX_CHUNK_SIZE = 1024 * 1024  # 1MB
 
 # 2021-01-15, users reported that `errors.TimeoutError` can occur while downloading files.
 TIMED_OUT_SLEEP = 1
+
+
+def _transfer_jsonable(value):
+    if isinstance(value, bytes):
+        return value.hex()
+    if isinstance(value, dict):
+        return {key: _transfer_jsonable(item) for key, item in value.items() if key != "file_reference"}
+    if isinstance(value, (list, tuple)):
+        return [_transfer_jsonable(item) for item in value]
+    if isinstance(value, TLObject):
+        return _transfer_jsonable(value.to_dict())
+    return value
+
+
+def _build_download_fingerprint(input_location, *, dc_id=None, file_size=None, key=None, iv=None):
+    info = utils._get_file_info(input_location)
+    payload = {
+        "transfer_type": "download",
+        "location": _transfer_jsonable(info.location),
+        "dc_id": info.dc_id if info.dc_id is not None else dc_id,
+        "file_size": info.size if info.size is not None else file_size,
+        "encrypted": bool(key and iv),
+    }
+    data = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def _default_download_state_path(path: pathlib.Path) -> pathlib.Path:
+    return path.with_name(f"{path.name}.download.state.json")
 
 
 class _CdnRedirect(Exception):
@@ -364,6 +396,9 @@ class DownloadMethods:
         *,
         thumb: "typing.Union[int, types.TypePhotoSize]" = None,
         progress_callback: "hints.ProgressCallback" = None,
+        resume: bool = False,
+        resume_key: str = None,
+        state_store=None,
     ) -> typing.Optional[typing.Union[str, bytes]]:
         """
         Downloads the given media from a message object.
@@ -462,14 +497,33 @@ class DownloadMethods:
                 media = media.webpage.document or media.webpage.photo
 
         if isinstance(media, (types.MessageMediaPhoto, types.Photo)):
-            return await self._download_photo(media, file, date, thumb, progress_callback)
+            return await self._download_photo(
+                media,
+                file,
+                date,
+                thumb,
+                progress_callback,
+                resume=resume,
+                resume_key=resume_key,
+                state_store=state_store,
+            )
         elif isinstance(media, (types.MessageMediaDocument, types.Document)):
             return await self._download_document(
-                media, file, date, thumb, progress_callback, msg_data
+                media,
+                file,
+                date,
+                thumb,
+                progress_callback,
+                msg_data,
+                resume=resume,
+                resume_key=resume_key,
+                state_store=state_store,
             )
         elif isinstance(media, types.MessageMediaContact) and thumb is None:
             return self._download_contact(media, file)
         elif isinstance(media, (types.WebDocument, types.WebDocumentNoProxy)) and thumb is None:
+            if resume:
+                raise ValueError("resume is not supported for web document downloads")
             return await self._download_web_document(media, file, progress_callback)
 
     async def download_file(
@@ -483,6 +537,9 @@ class DownloadMethods:
         dc_id: int = None,
         key: bytes = None,
         iv: bytes = None,
+        resume: bool = False,
+        resume_key: str = None,
+        state_store=None,
     ) -> typing.Optional[bytes]:
         """
         Low-level method to download files from their input location.
@@ -545,6 +602,9 @@ class DownloadMethods:
             dc_id=dc_id,
             key=key,
             iv=iv,
+            resume=resume,
+            resume_key=resume_key,
+            state_store=state_store,
         )
 
     async def _download_file(
@@ -560,6 +620,9 @@ class DownloadMethods:
         iv: bytes = None,
         msg_data: tuple = None,
         cdn_redirect: types.upload.FileCdnRedirect = None,
+        resume: bool = False,
+        resume_key: str = None,
+        state_store=None,
     ) -> typing.Optional[bytes]:
         if not part_size_kb:
             if not file_size:
@@ -577,18 +640,76 @@ class DownloadMethods:
             file = str(file.absolute())
 
         in_memory = file is None or file is bytes
+        transfer_store = None
+        transfer_state = None
+        transfer_key = None
+        current_offset = 0
+
+        if resume:
+            if in_memory or not isinstance(file, str):
+                raise TypeError("resume requires a filesystem path output")
+
+            output_path = pathlib.Path(file)
+            if state_store is None:
+                transfer_store = JsonTransferStateStore(_default_download_state_path(output_path))
+            elif isinstance(state_store, (str, bytes, os.PathLike, pathlib.Path)):
+                transfer_store = JsonTransferStateStore(state_store)
+            elif all(hasattr(state_store, attr) for attr in ("load", "save", "delete")):
+                transfer_store = state_store
+            else:
+                raise TypeError("state_store must be a path or an object with load/save/delete")
+
+            transfer_key = resume_key or str(output_path.resolve())
+            current_offset = output_path.stat().st_size if output_path.exists() else 0
+            fingerprint = _build_download_fingerprint(
+                input_location,
+                dc_id=dc_id,
+                file_size=file_size,
+                key=key,
+                iv=iv,
+            )
+            transfer_state = transfer_store.load(transfer_key)
+            if transfer_state is not None:
+                if transfer_state.transfer_type != "download":
+                    raise ValueError("resume state transfer type does not match download")
+                if transfer_state.location_fingerprint != fingerprint:
+                    raise ValueError("resume state does not match this download")
+                if transfer_state.output_path and transfer_state.output_path != str(output_path):
+                    raise ValueError("resume state output path does not match the target file")
+
+            if file_size is not None and current_offset > file_size:
+                raise ValueError("existing file is larger than the expected download size")
+
+            transfer_state = FileTransferState(
+                transfer_type="download",
+                resume_key=transfer_key,
+                location_fingerprint=fingerprint,
+                offset=current_offset,
+                output_path=str(output_path),
+                file_size=file_size,
+                dc_id=dc_id,
+                request_size=part_size,
+                chunk_size=part_size,
+            )
+            transfer_store.save(transfer_key, transfer_state)
+
+            if file_size is not None and current_offset >= file_size:
+                transfer_store.delete(transfer_key)
+                return None
+
         if in_memory:
             f = io.BytesIO()
         elif isinstance(file, str):
             # Ensure that we'll be able to download the media
             helpers.ensure_parent_dir_exists(file)
-            f = open(file, "wb")
+            f = open(file, "ab" if resume else "wb")
         else:
             f = file
 
         try:
             async for chunk in self._iter_download(
                 input_location,
+                offset=current_offset,
                 request_size=part_size,
                 dc_id=dc_id,
                 msg_data=msg_data,
@@ -600,14 +721,36 @@ class DownloadMethods:
                 if inspect.isawaitable(r):
                     await r
 
+                if resume and callable(getattr(f, "flush", None)):
+                    f.flush()
+
                 if progress_callback:
                     r = progress_callback(f.tell(), file_size)
                     if inspect.isawaitable(r):
                         await r
 
+                if transfer_store is not None:
+                    transfer_store.save(
+                        transfer_key,
+                        FileTransferState(
+                            transfer_type="download",
+                            resume_key=transfer_key,
+                            location_fingerprint=transfer_state.location_fingerprint,
+                            offset=f.tell(),
+                            output_path=transfer_state.output_path,
+                            file_size=file_size,
+                            dc_id=dc_id,
+                            request_size=part_size,
+                            chunk_size=part_size,
+                        ),
+                    )
+
             # Not all IO objects have flush (see #1227)
             if callable(getattr(f, "flush", None)):
                 f.flush()
+
+            if transfer_store is not None:
+                transfer_store.delete(transfer_key)
 
             if in_memory:
                 return f.getvalue()
@@ -624,6 +767,9 @@ class DownloadMethods:
                 iv=e.cdn_redirect.encryption_iv,
                 msg_data=msg_data,
                 cdn_redirect=e.cdn_redirect,
+                resume=resume,
+                resume_key=resume_key,
+                state_store=state_store,
             )
         finally:
             if isinstance(file, str) or in_memory:
@@ -883,7 +1029,18 @@ class DownloadMethods:
                 f.close()
         return file
 
-    async def _download_photo(self: "TelegramClient", photo, file, date, thumb, progress_callback):
+    async def _download_photo(
+        self: "TelegramClient",
+        photo,
+        file,
+        date,
+        thumb,
+        progress_callback,
+        *,
+        resume: bool = False,
+        resume_key: str = None,
+        state_store=None,
+    ):
         """Specialized version of .download_media() for photos"""
         # Determine the photo and its largest size
         if isinstance(photo, types.MessageMediaPhoto):
@@ -919,6 +1076,9 @@ class DownloadMethods:
             file,
             file_size=file_size,
             progress_callback=progress_callback,
+            resume=resume,
+            resume_key=resume_key,
+            state_store=state_store,
         )
         return result if file is bytes else file
 
@@ -944,7 +1104,19 @@ class DownloadMethods:
 
         return kind, possible_names
 
-    async def _download_document(self, document, file, date, thumb, progress_callback, msg_data):
+    async def _download_document(
+        self,
+        document,
+        file,
+        date,
+        thumb,
+        progress_callback,
+        msg_data,
+        *,
+        resume: bool = False,
+        resume_key: str = None,
+        state_store=None,
+    ):
         """Specialized version of .download_media() for documents."""
         if isinstance(document, types.MessageMediaDocument):
             document = document.document
@@ -977,6 +1149,9 @@ class DownloadMethods:
             file_size=size.size if size else document.size,
             progress_callback=progress_callback,
             msg_data=msg_data,
+            resume=resume,
+            resume_key=resume_key,
+            state_store=state_store,
         )
 
         return result if file is bytes else file

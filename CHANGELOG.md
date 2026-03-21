@@ -34,6 +34,12 @@
 - Added `RequestContext` metadata for middleware chains, including `attempt`, `ordered`, `flood_sleep_threshold`, `started_at`, `sender`, and batch/original request information.
 - Added explicit `add_event_middleware()` and `remove_event_middleware()` helpers while keeping `client.middleware(...)` as a backward-compatible decorator alias.
 
+### Transfers
+
+- Added resumable file downloads via `download_file(..., resume=True, resume_key=..., state_store=...)`.
+- Added resumable `download_media()` support for Telegram-hosted document and photo downloads.
+- Added `FileTransferState` and `JsonTransferStateStore` primitives for persisting transfer checkpoints between runs.
+
 ## v1.42.12.post1 (2026-03-18)
 
 ### Fix protection
