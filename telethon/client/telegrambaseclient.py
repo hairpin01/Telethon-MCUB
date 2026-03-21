@@ -26,6 +26,7 @@ from .._updates import (
     Entity,
     EntityType,
 )
+from .protection import build_protection_policy
 
 try:
     import python_socks
@@ -301,6 +302,8 @@ class TelegramBaseClient(abc.ABC):
                 return base_logger.getChild(key)
 
         self._log = _Loggers()
+        self._protection_policy = build_protection_policy("strict")
+        self._on_blocked_request = None
 
         # Determine what session object we have
         if isinstance(session, (str, pathlib.Path)):

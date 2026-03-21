@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import inspect
 import itertools
 import time
 import typing
@@ -8,7 +9,13 @@ from .. import errors, helpers, utils, hints
 from ..errors import MultiError, RPCError
 from ..helpers import retry_range
 from ..tl import TLRequest, types, functions
-from .protection import ScamModuleDetected, find_dangerous_request
+from .protection import (
+    ProtectionPolicy,
+    ProtectionViolation,
+    ScamModuleDetected,
+    build_protection_policy,
+    check_request_safety,
+)
 
 _NOT_A_REQUEST = lambda: TypeError("You can only invoke requests, not types!")
 
@@ -27,6 +34,48 @@ def _fmt_flood(delay, request, *, early=False, td=datetime.timedelta):
 
 
 class UserMethods:
+    @property
+    def protection_mode(self: "TelegramClient") -> str:
+        return self._protection_policy.mode
+
+    def get_protection_policy(self: "TelegramClient") -> ProtectionPolicy:
+        return self._protection_policy
+
+    def set_protection_policy(
+        self: "TelegramClient", policy: typing.Union[str, ProtectionPolicy]
+    ) -> ProtectionPolicy:
+        if isinstance(policy, str):
+            policy = build_protection_policy(policy)
+        elif not isinstance(policy, ProtectionPolicy):
+            raise TypeError("policy must be a protection mode string or ProtectionPolicy")
+
+        self._protection_policy = policy
+        return policy
+
+    def set_protection_mode(self: "TelegramClient", mode: str, **overrides) -> ProtectionPolicy:
+        return self.set_protection_policy(build_protection_policy(mode, **overrides))
+
+    def on_blocked_request(self: "TelegramClient", func):
+        self._on_blocked_request = func
+        return func
+
+    def clear_blocked_request_handler(self: "TelegramClient") -> None:
+        self._on_blocked_request = None
+
+    async def _handle_protection_violation(
+        self: "TelegramClient", violation: ProtectionViolation
+    ) -> None:
+        if violation.policy.log_blocked:
+            self._log[__name__].warning(violation.log_message)
+
+        if self._on_blocked_request is not None:
+            result = self._on_blocked_request(violation)
+            if inspect.isawaitable(result):
+                await result
+
+        if violation.policy.should_block:
+            raise ScamModuleDetected(violation.message)
+
     async def __call__(self: "TelegramClient", request, ordered=False, flood_sleep_threshold=None):
         return await self._call(
             self._sender,
@@ -57,11 +106,9 @@ class UserMethods:
             if not isinstance(r, TLRequest):
                 raise _NOT_A_REQUEST()
 
-            dangerous_request = find_dangerous_request(r)
-            if dangerous_request is not None:
-                raise ScamModuleDetected(
-                    f"Method '{type(dangerous_request).__name__}' blocked!"
-                )
+            violation = check_request_safety(r, self._protection_policy)
+            if violation is not None:
+                await self._handle_protection_violation(violation)
 
             await r.resolve(self, utils)
 

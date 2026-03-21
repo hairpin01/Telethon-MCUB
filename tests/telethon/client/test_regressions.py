@@ -2,10 +2,14 @@ import pytest
 
 from telethon import TelegramClient, events
 from telethon.client.payments import GiftMethods
-from telethon.client.protection import ScamModuleDetected, find_dangerous_request
+from telethon.client.protection import (
+    ProtectionPolicy,
+    ScamModuleDetected,
+    find_dangerous_request,
+)
 from telethon.client.users import UserMethods
 from telethon.tl import TLRequest, functions, types
-from telethon.tl.functions.account import DeleteAccountRequest
+from telethon.tl.functions.account import DeleteAccountRequest, GetAuthorizationsRequest
 from telethon.tl.functions.auth import LogOutRequest, ResetAuthorizationsRequest
 
 
@@ -139,6 +143,91 @@ async def test_additional_dangerous_auth_methods_are_blocked():
 
     with pytest.raises(ScamModuleDetected):
         await client._call(_FailSender(), LogOutRequest())
+
+
+@pytest.mark.asyncio
+async def test_safe_profile_allows_read_only_authorizations_requests():
+    client = TelegramClient(None, 1, "1")
+    sender = _EchoSender()
+
+    policy = client.set_protection_mode("safe")
+    result = await client._call(sender, GetAuthorizationsRequest())
+
+    assert policy.mode == "safe"
+    assert sender.last_request.__class__ is GetAuthorizationsRequest
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_off_profile_disables_blocking():
+    client = TelegramClient(None, 1, "1")
+    sender = _EchoSender()
+
+    policy = client.set_protection_mode("off")
+    result = await client._call(sender, DeleteAccountRequest(reason="x"))
+
+    assert policy.mode == "off"
+    assert sender.last_request.__class__ is DeleteAccountRequest
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_custom_policy_can_allow_strictly_blocked_request():
+    client = TelegramClient(None, 1, "1")
+    sender = _EchoSender()
+
+    policy = client.set_protection_mode(
+        "custom",
+        allowed_requests=(DeleteAccountRequest,),
+    )
+    result = await client._call(sender, DeleteAccountRequest(reason="x"))
+
+    assert policy.mode == "custom"
+    assert sender.last_request.__class__ is DeleteAccountRequest
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_dry_run_reports_but_does_not_block():
+    client = TelegramClient(None, 1, "1")
+    sender = _EchoSender()
+    seen = []
+
+    @client.on_blocked_request
+    async def _capture(violation):
+        seen.append(violation)
+
+    policy = client.set_protection_mode("strict", dry_run=True)
+    result = await client._call(sender, DeleteAccountRequest(reason="x"))
+
+    assert policy.dry_run is True
+    assert sender.last_request.__class__ is DeleteAccountRequest
+    assert result == []
+    assert len(seen) == 1
+    assert seen[0].policy.mode == "strict"
+    assert seen[0].dangerous_request.__class__ is DeleteAccountRequest
+
+
+def test_set_protection_policy_accepts_policy_instance():
+    client = TelegramClient(None, 1, "1")
+    policy = ProtectionPolicy(
+        mode="custom",
+        blocked_requests=(DeleteAccountRequest,),
+        raise_on_blocked=False,
+    )
+
+    applied = client.set_protection_policy(policy)
+
+    assert applied is policy
+    assert client.get_protection_policy() is policy
+    assert client.protection_mode == "custom"
+
+
+def test_invalid_protection_mode_is_rejected():
+    client = TelegramClient(None, 1, "1")
+
+    with pytest.raises(ValueError):
+        client.set_protection_mode("paranoid")
 
 
 @pytest.mark.asyncio

@@ -20,7 +20,7 @@ import urllib.request
 from pathlib import Path
 from subprocess import run
 
-from setuptools import find_packages, setup
+from setuptools import setup
 
 # Needed since we're importing local files
 sys.path.insert(0, os.path.dirname(__file__))
@@ -216,7 +216,13 @@ def main(argv):
             print(e)
             return
 
-        remove_dirs = ["__pycache__", "build", "dist", "Telethon.egg-info"]
+        remove_dirs = [
+            "__pycache__",
+            "build",
+            "dist",
+            "Telethon.egg-info",
+            "Telethon_MCUB.egg-info",
+        ]
         for root, _dirs, _files in os.walk(LIBRARY_DIR, topdown=False):
             # setuptools is including __pycache__ for some reason (#1605)
             if root.endswith("/__pycache__"):
@@ -227,7 +233,7 @@ def main(argv):
         run("python3 setup.py sdist", shell=True)
         run("python3 setup.py bdist_wheel", shell=True)
         run("twine upload dist/*", shell=True)
-        for x in ("build", "dist", "Telethon.egg-info"):
+        for x in ("build", "dist", "Telethon.egg-info", "Telethon_MCUB.egg-info"):
             shutil.rmtree(x, ignore_errors=True)
 
     else:
@@ -235,58 +241,9 @@ def main(argv):
         if GENERATOR_DIR.is_dir() and not (len(argv) >= 2 and argv[1] == "clean"):
             generate(["tl", "errors"])
 
-        # Get the long description from the README file
-        with open("README.rst", "r", encoding="utf-8") as f:
-            long_description = f.read()
-
-        with open("telethon/version.py", "r", encoding="utf-8") as f:
-            version = re.search(
-                r'^__version__\s*=\s*["\'](.*)["\']', f.read(), flags=re.MULTILINE
-            ).group(1)
-        setup(
-            name="Telethon",
-            version=version,
-            description="Full-featured Telegram client library for Python 3",
-            long_description=long_description,
-            url="https://github.com/LonamiWebs/Telethon",
-            download_url="https://github.com/LonamiWebs/Telethon/releases",
-            author="Lonami Exo",
-            author_email="totufals@hotmail.com",
-            license="MIT",
-            # See https://stackoverflow.com/a/40300957/4759433
-            # -> https://www.python.org/dev/peps/pep-0345/#requires-python
-            # -> http://setuptools.readthedocs.io/en/latest/setuptools.html
-            python_requires=">=3.5",
-            # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
-            classifiers=[
-                #   3 - Alpha
-                #   4 - Beta
-                #   5 - Production/Stable
-                "Development Status :: 5 - Production/Stable",
-                "Intended Audience :: Developers",
-                "Topic :: Communications :: Chat",
-                "License :: OSI Approved :: MIT License",
-                "Programming Language :: Python :: 3",
-                "Programming Language :: Python :: 3.5",
-                "Programming Language :: Python :: 3.6",
-                "Programming Language :: Python :: 3.7",
-                "Programming Language :: Python :: 3.8",
-            ],
-            keywords="telegram api chat client library messaging mtproto",
-            packages=find_packages(
-                include=["telethon*"],
-                exclude=[
-                    "telethon_*",
-                    "tests*",
-                    "build*",
-                    "dist*",
-                    "*.egg-info*",
-                    "deps*",
-                ],
-            ),
-            install_requires=["pyaes", "rsa"],
-            extras_require={"cryptg": ["cryptg"]},
-        )
+        # Package metadata lives in pyproject.toml. Keep setup.py only for the
+        # custom generation/release entrypoints above.
+        setup()
 
 
 if __name__ == "__main__":

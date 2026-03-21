@@ -7,7 +7,8 @@ name = "Telethon-MCUB"
 dynamic = ["version"]
 description = "Full-featured Telegram client library for Python 3, forked for userbot use"
 readme = "README.rst"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Lonami Exo", email = "totufals@hotmail.com" }
 ]
@@ -17,7 +18,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Topic :: Communications :: Chat",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -29,6 +29,15 @@ dependencies = ["pyaes", "rsa"]
 [project.optional-dependencies]
 cryptg = ["cryptg"]
 socks = ["python-socks[asyncio]"]
+media = ["hachoir", "pillow"]
+speedups = ["isal"]
+all = [
+    "cryptg",
+    "python-socks[asyncio]",
+    "hachoir",
+    "pillow",
+    "isal",
+]
 
 [project.urls]
 Homepage = "https://github.com/hairpin01/Telethon-MCUB"

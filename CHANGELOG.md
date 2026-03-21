@@ -1,6 +1,22 @@
 # Telethon-MCUB Changelog
 
-## v1.42.12post1 (2026-03-18)
+## Unreleased
+
+### Packaging / Distribution
+
+- Unified package metadata around `pyproject.toml` so `setup.py` no longer overrides the fork name, version, Python requirement, and project URLs with upstream Telethon values.
+- Fixed requirement file typos in `optional-requirements.txt` and `dev-requirements.txt`.
+- Reworked `README.rst` to document installation via `Telethon-MCUB` and the available optional extras.
+- Updated issue template and package metadata to point to `Telethon-MCUB` instead of the upstream package.
+
+### Security / Protection
+
+- Added configurable protection profiles: `off`, `safe`, `strict`, and `custom`.
+- Added `ProtectionPolicy` and `ProtectionViolation` primitives for request inspection and policy-driven blocking.
+- Added client-side protection controls: `protection_mode`, `get_protection_policy()`, `set_protection_policy()`, `set_protection_mode()`, `on_blocked_request()`, and `clear_blocked_request_handler()`.
+- Added `dry_run` and allowlist overrides so blocked requests can be observed without being rejected.
+
+## v1.42.12.post1 (2026-03-18)
 
 ### Fix protection
 

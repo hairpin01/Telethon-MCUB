@@ -92,5 +92,5 @@ body:
           required: true
         - label: I have searched for this issue before posting it and there isn't an open duplicate.
           required: true
-        - label: I ran `pip install -U https://github.com/LonamiWebs/Telethon/archive/v1.zip` and triggered the bug in the latest version.
+        - label: I reproduced the bug on the latest available `Telethon-MCUB` version.
           required: true
