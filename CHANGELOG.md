@@ -39,6 +39,8 @@
 - Added resumable file downloads via `download_file(..., resume=True, resume_key=..., state_store=...)`.
 - Added resumable `download_media()` support for Telegram-hosted document and photo downloads.
 - Added `FileTransferState` and `JsonTransferStateStore` primitives for persisting transfer checkpoints between runs.
+- Added resumable uploads via `upload_file(..., resume=True, resume_key=..., state_store=...)`.
+- Added single-file `send_file()` / `send_message(file=...)` support for resumable uploads, with album uploads explicitly excluded from resume mode for now.
 
 ## v1.42.12.post1 (2026-03-18)
 

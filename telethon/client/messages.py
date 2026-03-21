@@ -691,6 +691,9 @@ class MessageMethods:
         schedule: "hints.DateLike" = None,
         comment_to: "typing.Union[int, types.Message]" = None,
         nosound_video: bool = None,
+        resume: bool = False,
+        resume_key: str = None,
+        state_store=None,
         send_as: typing.Optional["hints.EntityLike"] = None,
         message_effect_id: typing.Optional[int] = None,
     ) -> "types.Message":
@@ -907,6 +910,9 @@ class MessageMethods:
                 comment_to=comment_to,
                 background=background,
                 nosound_video=nosound_video,
+                resume=resume,
+                resume_key=resume_key,
+                state_store=state_store,
                 send_as=send_as,
                 message_effect_id=message_effect_id,
             )
@@ -939,6 +945,9 @@ class MessageMethods:
                     formatting_entities=message.entities,
                     parse_mode=None,  # explicitly disable parse_mode to force using even empty formatting_entities
                     schedule=schedule,
+                    resume=resume,
+                    resume_key=resume_key,
+                    state_store=state_store,
                     send_as=send_as,
                     message_effect_id=message_effect_id,
                 )

@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import io
 import itertools
+import json
 import os
 import pathlib
 import re
@@ -14,6 +15,7 @@ from ..crypto import AES
 from .. import utils, helpers, hints
 from ..tl import types, functions, custom
 from .topics import build_topic_reply_to
+from .transfers import FileTransferState, JsonTransferStateStore
 
 try:
     import PIL
@@ -36,6 +38,25 @@ class _CacheType:
 
     def __eq__(self, other):
         return self._cls == other
+
+
+def _default_upload_state_path(path: pathlib.Path) -> pathlib.Path:
+    return path.with_name(f"{path.name}.upload.state.json")
+
+
+def _build_upload_fingerprint(path: pathlib.Path, *, file_size, file_name, part_size, key=None, iv=None):
+    stat = path.stat()
+    payload = {
+        "transfer_type": "upload",
+        "path": str(path.resolve()),
+        "file_size": file_size,
+        "file_name": file_name,
+        "part_size": part_size,
+        "mtime_ns": stat.st_mtime_ns,
+        "encrypted": bool(key and iv),
+    }
+    data = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
 def _resize_photo_if_needed(file, is_image, width=2560, height=2560, background=(255, 255, 255)):
@@ -144,6 +165,9 @@ class UploadMethods:
         comment_to: "typing.Union[int, types.Message]" = None,
         ttl: int = None,
         nosound_video: bool = None,
+        resume: bool = False,
+        resume_key: str = None,
+        state_store=None,
         send_as: typing.Optional["hints.EntityLike"] = None,
         message_effect_id: typing.Optional[int] = None,
         **kwargs,
@@ -415,6 +439,9 @@ class UploadMethods:
         # First check if the user passed an iterable, in which case
         # we may want to send grouped.
         if utils.is_list_like(file):
+            if resume:
+                raise ValueError("resume is not supported for album uploads")
+
             sent_count = 0
             used_callback = (
                 None
@@ -491,6 +518,9 @@ class UploadMethods:
             supports_streaming=supports_streaming,
             ttl=ttl,
             nosound_video=nosound_video,
+            resume=resume,
+            resume_key=resume_key,
+            state_store=state_store,
         )
 
         # e.g. invalid cast from :tl:`MessageMediaWebPage`
@@ -644,6 +674,9 @@ class UploadMethods:
         key: bytes = None,
         iv: bytes = None,
         progress_callback: "hints.ProgressCallback" = None,
+        resume: bool = False,
+        resume_key: str = None,
+        state_store=None,
     ) -> "types.TypeInputFile":
         """
         Uploads a file to Telegram's servers, without sending it.
@@ -729,7 +762,12 @@ class UploadMethods:
         if isinstance(file, (types.InputFile, types.InputFileBig)):
             return file  # Already uploaded
 
-        pos = 0
+        if isinstance(file, pathlib.Path):
+            file = str(file.absolute())
+
+        if resume and not isinstance(file, str):
+            raise TypeError("resume requires a filesystem path input")
+
         async with helpers._FileStream(file, file_size=file_size) as stream:
             # Opening the stream will determine the correct file size
             file_size = stream.file_size
@@ -746,10 +784,8 @@ class UploadMethods:
             if part_size % 1024 != 0:
                 raise ValueError("The part size must be evenly divisible by 1024")
 
-            # Set a default file name if None was specified
-            file_id = helpers.generate_random_long()
             if not file_name:
-                file_name = stream.name or str(file_id)
+                file_name = stream.name or "unnamed"
 
             # If the file name lacks extension, add it if possible.
             # Else Telegram complains with `PHOTO_EXT_INVALID_ERROR`
@@ -760,15 +796,100 @@ class UploadMethods:
             # Determine whether the file is too big (over 10MB) or not
             # Telegram does make a distinction between smaller or larger files
             is_big = file_size > 10 * 1024 * 1024
-            hash_md5 = hashlib.md5()
-
             part_count = (file_size + part_size - 1) // part_size
+            file_id = helpers.generate_random_long()
+            uploaded_offset = 0
+            transfer_key = None
+            transfer_store = None
+            transfer_state = None
+
+            if resume:
+                input_path = pathlib.Path(file)
+                if state_store is None:
+                    transfer_store = JsonTransferStateStore(_default_upload_state_path(input_path))
+                elif isinstance(state_store, (str, bytes, os.PathLike, pathlib.Path)):
+                    transfer_store = JsonTransferStateStore(state_store)
+                elif all(hasattr(state_store, attr) for attr in ("load", "save", "delete")):
+                    transfer_store = state_store
+                else:
+                    raise TypeError("state_store must be a path or an object with load/save/delete")
+
+                transfer_key = resume_key or str(input_path.resolve())
+                fingerprint = _build_upload_fingerprint(
+                    input_path,
+                    file_size=file_size,
+                    file_name=file_name,
+                    part_size=part_size,
+                    key=key,
+                    iv=iv,
+                )
+                transfer_state = transfer_store.load(transfer_key)
+                if transfer_state is not None:
+                    if transfer_state.transfer_type != "upload":
+                        raise ValueError("resume state transfer type does not match upload")
+                    if transfer_state.location_fingerprint != fingerprint:
+                        raise ValueError("resume state does not match this upload")
+
+                    metadata = transfer_state.metadata or {}
+                    try:
+                        file_id = int(metadata["file_id"])
+                    except (KeyError, TypeError, ValueError):
+                        raise ValueError("resume state is missing upload file_id")
+
+                    uploaded_offset = int(transfer_state.offset or 0)
+                    if uploaded_offset > file_size:
+                        raise ValueError("resume state offset exceeds the upload file size")
+                    if uploaded_offset != file_size and uploaded_offset % part_size != 0:
+                        raise ValueError("resume state offset is not aligned to the upload part size")
+
+                transfer_state = FileTransferState(
+                    transfer_type="upload",
+                    resume_key=transfer_key,
+                    location_fingerprint=fingerprint,
+                    offset=uploaded_offset,
+                    output_path=str(input_path),
+                    file_size=file_size,
+                    request_size=part_size,
+                    chunk_size=part_size,
+                    metadata={
+                        "file_id": file_id,
+                        "file_name": file_name,
+                        "part_count": part_count,
+                        "is_big": is_big,
+                    },
+                )
+                transfer_store.save(transfer_key, transfer_state)
+
+            hash_md5 = hashlib.md5()
+            if uploaded_offset and not is_big:
+                await helpers._maybe_await(stream.seek(0, os.SEEK_SET))
+                remaining = uploaded_offset
+                while remaining > 0:
+                    chunk = await helpers._maybe_await(stream.read(min(part_size, remaining)))
+                    if not isinstance(chunk, bytes):
+                        raise TypeError(
+                            "file descriptor returned {}, not bytes (you must "
+                            "open the file in bytes mode)".format(type(chunk))
+                        )
+                    if key and iv:
+                        chunk = AES.encrypt_ige(chunk, key, iv)
+                    if not is_big:
+                        hash_md5.update(chunk)
+                    remaining -= len(chunk)
+
+            if uploaded_offset:
+                await helpers._maybe_await(stream.seek(uploaded_offset, os.SEEK_SET))
+
             self._log[__name__].info(
                 "Uploading file of %d bytes in %d chunks of %d", file_size, part_count, part_size
             )
 
-            pos = 0
-            for part_index in range(part_count):
+            pos = uploaded_offset
+            start_part_index = uploaded_offset // part_size
+            if progress_callback and uploaded_offset:
+                await helpers._maybe_await(progress_callback(uploaded_offset, file_size))
+
+            for part_index in range(start_part_index, part_count):
                 # Read the file by in chunks of size part_size
                 part = await helpers._maybe_await(stream.read(part_size))
 
@@ -812,8 +933,26 @@ class UploadMethods:
                     self._log[__name__].debug("Uploaded %d/%d", part_index + 1, part_count)
                     if progress_callback:
                         await helpers._maybe_await(progress_callback(pos, file_size))
+                    if transfer_store is not None:
+                        transfer_store.save(
+                            transfer_key,
+                            FileTransferState(
+                                transfer_type="upload",
+                                resume_key=transfer_key,
+                                location_fingerprint=transfer_state.location_fingerprint,
+                                offset=pos,
+                                output_path=transfer_state.output_path,
+                                file_size=file_size,
+                                request_size=part_size,
+                                chunk_size=part_size,
+                                metadata=transfer_state.metadata,
+                            ),
+                        )
                 else:
                     raise RuntimeError("Failed to upload file part {}.".format(part_index))
+
+        if transfer_store is not None:
+            transfer_store.delete(transfer_key)
 
         if is_big:
             return types.InputFileBig(file_id, part_count, file_name)
@@ -840,6 +979,9 @@ class UploadMethods:
         as_image=None,
         ttl=None,
         nosound_video=None,
+        resume=False,
+        resume_key=None,
+        state_store=None,
     ):
         if not file:
             return None, None, None
@@ -891,6 +1033,9 @@ class UploadMethods:
                 _resize_photo_if_needed(file, as_image),
                 file_size=file_size,
                 progress_callback=progress_callback,
+                resume=resume,
+                resume_key=resume_key,
+                state_store=state_store,
             )
         elif re.match("https?://", file):
             if as_image:

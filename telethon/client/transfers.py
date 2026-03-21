@@ -17,6 +17,7 @@ class FileTransferState:
     dc_id: typing.Optional[int] = None
     request_size: typing.Optional[int] = None
     chunk_size: typing.Optional[int] = None
+    metadata: typing.Optional[dict[str, typing.Any]] = None
     version: int = 1
 
     def to_dict(self) -> dict[str, typing.Any]:
@@ -34,6 +35,7 @@ class FileTransferState:
             dc_id=data.get("dc_id"),
             request_size=data.get("request_size"),
             chunk_size=data.get("chunk_size"),
+            metadata=data.get("metadata"),
             version=int(data.get("version", 1) or 1),
         )
 
