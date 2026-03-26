@@ -659,7 +659,7 @@ class UpdateMethods:
 
         # Dispatch using type mapping for O(1) lookup per event type
         processed_types = set()
-        for builder_type, handlers in self._event_builders_by_type.items():
+        for builder_type, handlers in list(self._event_builders_by_type.items()):
             event = built.get(builder_type)
             if not event:
                 continue
