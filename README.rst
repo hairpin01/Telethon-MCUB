@@ -67,3 +67,4 @@ Project Links
 
 * Repository: https://github.com/hairpin01/Telethon-MCUB
 * Issues: https://github.com/hairpin01/Telethon-MCUB/issues
+* MCUB-fork: https://github.com/hairpin01/MCUB-fork
