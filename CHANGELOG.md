@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Premium Emoji Support in Buttons
+
+- Added `icon` parameter to all Button helper methods for custom emoji support.
+- Supported methods: `Button.inline()`, `Button.switch_inline()`, `Button.url()`, `Button.auth()`, `Button.text()`, `Button.request_location()`, `Button.request_phone()`, `Button.request_poll()`, `Button.buy()`, `Button.game()`.
+- The `icon` parameter accepts a Telegram custom emoji document_id (int).
+- Requires Telegram Premium on the client side.
+
+Usage:
+```python
+# Premium emoji on button
+Button.inline("Buy 💎", b"buy", icon=1234567890123456789)
+
+# Combination of color and emoji
+Button.inline("Confirm ✅", b"confirm", style="success", icon=1234567890123456789)
+
+# Works with reply keyboard too
+Button.text("Menu", style="primary", icon=1234567890123456789)
+```
+
 ### Packaging / Distribution
 
 - Unified package metadata around `pyproject.toml` so `setup.py` no longer overrides the fork name, version, Python requirement, and project URLs with upstream Telethon values.

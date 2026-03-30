@@ -2,21 +2,44 @@ from .. import types
 from ... import utils
 
 
-def _parse_style(style):
+def _parse_style(style=None, icon=None):
     """
-    Converts a style string into a KeyboardButtonStyle object.
+    Converts a style string and icon into a KeyboardButtonStyle object.
 
-    Valid values: 'primary' (blue), 'success' (green), 'danger' (red).
-    Returns None if style is None.
+    Valid style values: 'primary' (blue), 'success' (green), 'danger' (red).
+    Icon should be a Telegram custom emoji document_id (int).
+
+    If both icon and style are provided, creates a style with both.
+    If only icon is provided, creates a style with just the custom emoji.
+    If only style is provided, creates a colored button style.
+    Returns None if neither style nor icon is provided.
     """
+    if icon is not None:
+        if not isinstance(icon, int):
+            raise TypeError(f"icon must be an integer (Telegram custom emoji document_id), got {type(icon).__name__}")
+
+        if style is None:
+            return types.KeyboardButtonStyle(icon=icon)
+
+        style_lower = style.lower()
+        if style_lower == "primary":
+            return types.KeyboardButtonStyle(icon=icon, bg_primary=True)
+        elif style_lower == "success":
+            return types.KeyboardButtonStyle(icon=icon, bg_success=True)
+        elif style_lower == "danger":
+            return types.KeyboardButtonStyle(icon=icon, bg_danger=True)
+        else:
+            raise ValueError(f"Unknown style '{style}'. Use: 'primary', 'success', 'danger'")
+
     if style is None:
         return None
-    style = style.lower()
-    if style == "primary":
+
+    style_lower = style.lower()
+    if style_lower == "primary":
         return types.KeyboardButtonStyle(bg_primary=True)
-    elif style == "success":
+    elif style_lower == "success":
         return types.KeyboardButtonStyle(bg_success=True)
-    elif style == "danger":
+    elif style_lower == "danger":
         return types.KeyboardButtonStyle(bg_danger=True)
     else:
         raise ValueError(f"Unknown style '{style}'. Use: 'primary', 'success', 'danger'")
@@ -60,6 +83,10 @@ class Button:
     Most button methods accept a ``style`` keyword argument that sets the
     button color. Valid values are ``'primary'`` (blue), ``'success'`` (green),
     and ``'danger'`` (red). Requires Telegram 12.4+.
+
+    Most button methods also accept an ``icon`` keyword argument that sets a
+    custom emoji as the button icon. The ``icon`` should be a Telegram custom
+    emoji document_id (int). Requires Telegram Premium.
     """
 
     def __init__(self, button, *, resize, single_use, selective, persistent, placeholder):
@@ -90,7 +117,7 @@ class Button:
         )
 
     @staticmethod
-    def inline(text, data=None, *, style=None):
+    def inline(text, data=None, *, style=None, icon=None):
         """
         Creates a new inline button with some payload data in it.
 
@@ -110,6 +137,9 @@ class Button:
         Args:
             style (`str`, optional):
                 Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
+
+            icon (`int`, optional):
+                Custom emoji ID to use as button icon. Requires Telegram Premium.
         """
         if not data:
             data = text.encode("utf-8")
@@ -119,10 +149,10 @@ class Button:
         if len(data) > 64:
             raise ValueError("Too many bytes for the data")
 
-        return types.KeyboardButtonCallback(text, data, style=_parse_style(style))
+        return types.KeyboardButtonCallback(text, data, style=_parse_style(style, icon))
 
     @staticmethod
-    def switch_inline(text, query="", same_peer=False, *, style=None):
+    def switch_inline(text, query="", same_peer=False, *, style=None, icon=None):
         """
         Creates a new inline button to switch to inline query.
 
@@ -140,11 +170,14 @@ class Button:
         Args:
             style (`str`, optional):
                 Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
+
+            icon (`int`, optional):
+                Custom emoji ID to use as button icon. Requires Telegram Premium.
         """
-        return types.KeyboardButtonSwitchInline(text, query, same_peer, style=_parse_style(style))
+        return types.KeyboardButtonSwitchInline(text, query, same_peer, style=_parse_style(style, icon))
 
     @staticmethod
-    def url(text, url=None, *, style=None):
+    def url(text, url=None, *, style=None, icon=None):
         """
         Creates a new inline button to open the desired URL on click.
 
@@ -160,11 +193,14 @@ class Button:
         Args:
             style (`str`, optional):
                 Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
+
+            icon (`int`, optional):
+                Custom emoji ID to use as button icon. Requires Telegram Premium.
         """
-        return types.KeyboardButtonUrl(text, url or text, style=_parse_style(style))
+        return types.KeyboardButtonUrl(text, url or text, style=_parse_style(style, icon))
 
     @staticmethod
-    def auth(text, url=None, *, bot=None, write_access=False, fwd_text=None, style=None):
+    def auth(text, url=None, *, bot=None, write_access=False, fwd_text=None, style=None, icon=None):
         """
         Creates a new inline button to authorize the user at the given URL.
 
@@ -201,6 +237,9 @@ class Button:
             style (`str`, optional):
                 Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
 
+            icon (`int`, optional):
+                Custom emoji ID to use as button icon. Requires Telegram Premium.
+
         When the user clicks this button, a confirmation box will be shown
         to the user asking whether they want to login to the specified domain.
         """
@@ -210,7 +249,7 @@ class Button:
             bot=utils.get_input_user(bot or types.InputUserSelf()),
             request_write_access=write_access,
             fwd_text=fwd_text,
-            style=_parse_style(style),
+            style=_parse_style(style, icon),
         )
 
     @classmethod
@@ -224,6 +263,7 @@ class Button:
         persistent=None,
         placeholder=None,
         style=None,
+        icon=None,
     ):
         """
         Creates a new keyboard button with the given text.
@@ -258,6 +298,9 @@ class Button:
             style (`str`, optional):
                 Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
 
+            icon (`int`, optional):
+                Custom emoji ID to use as button icon. Requires Telegram Premium.
+
         When the user clicks this button, a text message with the same text
         as the button will be sent, and can be handled with `events.NewMessage
         <telethon.events.newmessage.NewMessage>`. You cannot distinguish
@@ -265,7 +308,7 @@ class Button:
         same text on their own.
         """
         return cls(
-            types.KeyboardButton(text, style=_parse_style(style)),
+            types.KeyboardButton(text, style=_parse_style(style, icon)),
             resize=resize,
             single_use=single_use,
             selective=selective,
@@ -284,6 +327,7 @@ class Button:
         persistent=None,
         placeholder=None,
         style=None,
+        icon=None,
     ):
         """
         Creates a new keyboard button to request the user's location on click.
@@ -295,12 +339,15 @@ class Button:
             style (`str`, optional):
                 Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
 
+            icon (`int`, optional):
+                Custom emoji ID to use as button icon. Requires Telegram Premium.
+
         When the user clicks this button, a confirmation box will be shown
         to the user asking whether they want to share their location with the
         bot, and if confirmed a message with geo media will be sent.
         """
         return cls(
-            types.KeyboardButtonRequestGeoLocation(text, style=_parse_style(style)),
+            types.KeyboardButtonRequestGeoLocation(text, style=_parse_style(style, icon)),
             resize=resize,
             single_use=single_use,
             selective=selective,
@@ -319,6 +366,7 @@ class Button:
         persistent=None,
         placeholder=None,
         style=None,
+        icon=None,
     ):
         """
         Creates a new keyboard button to request the user's phone on click.
@@ -330,12 +378,15 @@ class Button:
             style (`str`, optional):
                 Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
 
+            icon (`int`, optional):
+                Custom emoji ID to use as button icon. Requires Telegram Premium.
+
         When the user clicks this button, a confirmation box will be shown
         to the user asking whether they want to share their phone with the
         bot, and if confirmed a message with contact media will be sent.
         """
         return cls(
-            types.KeyboardButtonRequestPhone(text, style=_parse_style(style)),
+            types.KeyboardButtonRequestPhone(text, style=_parse_style(style, icon)),
             resize=resize,
             single_use=single_use,
             selective=selective,
@@ -355,6 +406,7 @@ class Button:
         persistent=None,
         placeholder=None,
         style=None,
+        icon=None,
     ):
         """
         Creates a new keyboard button to request the user to create a poll.
@@ -374,11 +426,14 @@ class Button:
             style (`str`, optional):
                 Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
 
+            icon (`int`, optional):
+                Custom emoji ID to use as button icon. Requires Telegram Premium.
+
         When the user clicks this button, a screen letting the user create a
         poll will be shown, and if they do create one, the poll will be sent.
         """
         return cls(
-            types.KeyboardButtonRequestPoll(text, quiz=force_quiz, style=_parse_style(style)),
+            types.KeyboardButtonRequestPoll(text, quiz=force_quiz, style=_parse_style(style, icon)),
             resize=resize,
             single_use=single_use,
             selective=selective,
@@ -411,7 +466,7 @@ class Button:
         )
 
     @staticmethod
-    def buy(text, *, style=None):
+    def buy(text, *, style=None, icon=None):
         """
         Creates a new inline button to buy a product.
 
@@ -426,11 +481,14 @@ class Button:
         Args:
             style (`str`, optional):
                 Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
+
+            icon (`int`, optional):
+                Custom emoji ID to use as button icon. Requires Telegram Premium.
         """
-        return types.KeyboardButtonBuy(text, style=_parse_style(style))
+        return types.KeyboardButtonBuy(text, style=_parse_style(style, icon))
 
     @staticmethod
-    def game(text, *, style=None):
+    def game(text, *, style=None, icon=None):
         """
         Creates a new inline button to start playing a game.
 
@@ -444,5 +502,8 @@ class Button:
         Args:
             style (`str`, optional):
                 Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
+
+            icon (`int`, optional):
+                Custom emoji ID to use as button icon. Requires Telegram Premium.
         """
-        return types.KeyboardButtonGame(text, style=_parse_style(style))
+        return types.KeyboardButtonGame(text, style=_parse_style(style, icon))
