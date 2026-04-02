@@ -36,7 +36,6 @@ Callback = typing.Callable[[typing.Any], typing.Any]
 
 
 class UpdateMethods:
-
     # region Public methods
 
     async def _run_until_disconnected(self: "TelegramClient"):
@@ -113,6 +112,7 @@ class UpdateMethods:
     def on(self: "TelegramClient", event: EventBuilder):
         """
         Decorator used to `add_event_handler` more conveniently.
+        Automatically tracks handlers by module for cleanup on unload.
 
 
         Arguments
@@ -133,12 +133,46 @@ class UpdateMethods:
         """
 
         def decorator(f):
-            self.add_event_handler(f, event)
+            module_name = self._get_caller_module()
+            self.add_event_handler(f, event, module_name=module_name)
             return f
 
         return decorator
 
-    def add_event_handler(self: "TelegramClient", callback: Callback, event: EventBuilder = None):
+    def _get_caller_module(self):
+        """Automatically determine module name from call stack."""
+        try:
+            for frame_info in inspect.stack():
+                module = inspect.getmodule(frame_info.frame)
+                if module:
+                    module_name = module.__name__
+                    if not module_name.startswith("telethon"):
+                        return module_name
+        except Exception:
+            pass
+        return None
+
+    def remove_module_handlers(self, module_name: str):
+        """Remove all handlers registered by a specific module."""
+        if not hasattr(self, "_event_handlers_by_module"):
+            return
+        if module_name not in self._event_handlers_by_module:
+            return
+
+        for callback, event in self._event_handlers_by_module[module_name]:
+            try:
+                self.remove_event_handler(callback, event)
+            except Exception:
+                pass
+
+        del self._event_handlers_by_module[module_name]
+
+    def add_event_handler(
+        self: "TelegramClient",
+        callback: Callback,
+        event: EventBuilder = None,
+        module_name: str = None,
+    ):
         """
         Registers a new event handler callback.
 
@@ -160,6 +194,10 @@ class UpdateMethods:
                 :tl:`Update` objects with no further processing) will
                 be passed instead.
 
+            module_name (`str`, optional):
+                Module name for tracking. If not provided, will be
+                auto-detected from call stack.
+
         Example
             .. code-block:: python
 
@@ -175,7 +213,9 @@ class UpdateMethods:
         if builders is not None:
             for ev in builders:
                 self._event_builders.append((ev, callback))
-                self._event_builders_by_type.setdefault(type(ev), []).append((ev, callback))
+                self._event_builders_by_type.setdefault(type(ev), []).append(
+                    (ev, callback)
+                )
             return
 
         if isinstance(event, type):
@@ -184,7 +224,20 @@ class UpdateMethods:
             event = events.Raw()
 
         self._event_builders.append((event, callback))
-        self._event_builders_by_type.setdefault(type(event), []).append((event, callback))
+        self._event_builders_by_type.setdefault(type(event), []).append(
+            (event, callback)
+        )
+
+        # Track handler by module for cleanup
+        if not module_name:
+            module_name = self._get_caller_module()
+
+        if module_name:
+            if not hasattr(self, "_event_handlers_by_module"):
+                self._event_handlers_by_module = {}
+            if module_name not in self._event_handlers_by_module:
+                self._event_handlers_by_module[module_name] = []
+            self._event_handlers_by_module[module_name].append((callback, event))
 
     def add_event_middleware(self, func):
         self._middleware.add(func)
@@ -296,7 +349,9 @@ class UpdateMethods:
         # If the MessageBox is not empty, the account had to be logged-in to fill in its state.
         # This flag is used to propagate the "you got logged-out" error up (but getting logged-out
         # can only happen if it was once logged-in).
-        was_once_logged_in = self._authorized is True or not self._message_box.is_empty()
+        was_once_logged_in = (
+            self._authorized is True or not self._message_box.is_empty()
+        )
 
         self._updates_error = None
         try:
@@ -331,8 +386,10 @@ class UpdateMethods:
                     )
                     await self._save_states_and_entities()
                     self._mb_entity_cache.retain(
-                        lambda id: id == self._mb_entity_cache.self_id
-                        or id in self._message_box.map
+                        lambda id: (
+                            id == self._mb_entity_cache.self_id
+                            or id in self._message_box.map
+                        )
                     )
                     if len(self._mb_entity_cache) >= self._entity_cache_limit:
                         warnings.warn(
@@ -411,14 +468,19 @@ class UpdateMethods:
                     if updates:
                         self._log[__name__].info("Got difference for account updates")
 
-                    _preprocess_updates = await self._preprocess_updates(updates, users, chats)
+                    _preprocess_updates = await self._preprocess_updates(
+                        updates, users, chats
+                    )
                     updates_to_dispatch.extend(_preprocess_updates)
                     continue
 
-                get_diff = self._message_box.get_channel_difference(self._mb_entity_cache)
+                get_diff = self._message_box.get_channel_difference(
+                    self._mb_entity_cache
+                )
                 if get_diff:
                     self._log[__name__].debug(
-                        "Getting difference for channel %s updates", get_diff.channel.channel_id
+                        "Getting difference for channel %s updates",
+                        get_diff.channel.channel_id,
                     )
                     try:
                         diff = await self(get_diff)
@@ -530,10 +592,13 @@ class UpdateMethods:
                     )
                     if updates:
                         self._log[__name__].info(
-                            "Got difference for channel %d updates", get_diff.channel.channel_id
+                            "Got difference for channel %d updates",
+                            get_diff.channel.channel_id,
                         )
 
-                    _preprocess_updates = await self._preprocess_updates(updates, users, chats)
+                    _preprocess_updates = await self._preprocess_updates(
+                        updates, users, chats
+                    )
                     updates_to_dispatch.extend(_preprocess_updates)
                     continue
 
@@ -542,7 +607,9 @@ class UpdateMethods:
                 if deadline_delay > 0:
                     # Don't bother sleeping and timing out if the delay is already 0 (pollutes the logs).
                     try:
-                        updates = await asyncio.wait_for(self._updates_queue.get(), deadline_delay)
+                        updates = await asyncio.wait_for(
+                            self._updates_queue.get(), deadline_delay
+                        )
                     except asyncio.TimeoutError:
                         self._log[__name__].debug("Timeout waiting for updates expired")
                         continue
@@ -557,7 +624,9 @@ class UpdateMethods:
                 except GapError:
                     continue  # get(_channel)_difference will start returning requests
 
-                _preprocess_updates = await self._preprocess_updates(processed, users, chats)
+                _preprocess_updates = await self._preprocess_updates(
+                    processed, users, chats
+                )
                 updates_to_dispatch.extend(_preprocess_updates)
         except asyncio.CancelledError:
             pass
@@ -571,7 +640,9 @@ class UpdateMethods:
     async def _preprocess_updates(self, updates, users, chats):
         self._mb_entity_cache.extend(users, chats)
         await utils.maybe_async(
-            self.session.process_entities(types.contacts.ResolvedPeer(None, users, chats))
+            self.session.process_entities(
+                types.contacts.ResolvedPeer(None, users, chats)
+            )
         )
         entities = {utils.get_peer_id(x): x for x in itertools.chain(users, chats)}
         for u in updates:
@@ -680,13 +751,14 @@ class UpdateMethods:
                 except errors.AlreadyInConversationError:
                     name = getattr(callback, "__name__", repr(callback))
                     self._log[__name__].debug(
-                        'Event handler "%s" already has an open conversation, ' "ignoring new one",
+                        'Event handler "%s" already has an open conversation, '
+                        "ignoring new one",
                         name,
                     )
                 except events.StopPropagation:
                     name = getattr(callback, "__name__", repr(callback))
                     self._log[__name__].debug(
-                        'Event handler "%s" stopped chain of propagation ' "for event %s.",
+                        'Event handler "%s" stopped chain of propagation for event %s.',
                         name,
                         type(event).__name__,
                     )
@@ -726,12 +798,14 @@ class UpdateMethods:
             except errors.AlreadyInConversationError:
                 name = getattr(callback, "__name__", repr(callback))
                 self._log[__name__].debug(
-                    'Event handler "%s" already has an open conversation, ' "ignoring new one", name
+                    'Event handler "%s" already has an open conversation, '
+                    "ignoring new one",
+                    name,
                 )
             except events.StopPropagation:
                 name = getattr(callback, "__name__", repr(callback))
                 self._log[__name__].debug(
-                    'Event handler "%s" stopped chain of propagation ' "for event %s.",
+                    'Event handler "%s" stopped chain of propagation for event %s.',
                     name,
                     type(event).__name__,
                 )
@@ -749,7 +823,7 @@ class UpdateMethods:
             await self.get_me()
         except Exception as e:
             self._log[__name__].warning(
-                "Error executing high-level request " "after reconnect: %s: %s", type(e), e
+                "Error executing high-level request after reconnect: %s: %s", type(e), e
             )
 
         return
@@ -778,7 +852,9 @@ class UpdateMethods:
 
             self._log[__name__].info("Successfully fetched missed updates")
         except errors.RPCError as e:
-            self._log[__name__].warning("Failed to get missed updates after " "reconnect: %r", e)
+            self._log[__name__].warning(
+                "Failed to get missed updates after reconnect: %r", e
+            )
         except Exception:
             self._log[__name__].exception(
                 "Unhandled exception while getting update difference after reconnect"
