@@ -214,3 +214,15 @@ def test_message_html_text_setter_parses_html():
     assert message.message == "Hello world"
     assert message.html_text == "Hello <strong>world</strong>"
     assert message.text == "Hello **world**"
+
+
+class TestPollMethods:
+    def test_add_poll_answer_method_exists(self):
+        """Test that add_poll_answer method exists (Bot API 9.6)"""
+        from telethon.client.messages import MessageMethods
+        assert hasattr(MessageMethods, 'add_poll_answer')
+
+    def test_delete_poll_answer_method_exists(self):
+        """Test that delete_poll_answer method exists (Bot API 9.6)"""
+        from telethon.client.messages import MessageMethods
+        assert hasattr(MessageMethods, 'delete_poll_answer')

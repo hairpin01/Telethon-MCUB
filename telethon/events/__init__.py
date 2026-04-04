@@ -9,6 +9,7 @@ from .userupdate import UserUpdate
 from .callbackquery import CallbackQuery
 from .inlinequery import InlineQuery
 from .joinrequest import JoinRequest
+from .botupdate import BotUpdate
 
 _HANDLERS_ATTRIBUTE = "__tl.handlers"
 

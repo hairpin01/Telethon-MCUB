@@ -1705,6 +1705,93 @@ class MessageMethods:
             else ""
         )
 
+    async def add_poll_answer(
+        self: "TelegramClient",
+        peer: "hints.DialogLike",
+        message: "hints.MessageIDLike",
+        text: str,
+        option: bytes,
+    ) -> "types.Message":
+        """
+        Adds a new answer option to a poll. (Bot API 9.6)
+
+        Arguments
+            peer (`entity`):
+                The chat where the poll is located.
+
+            message (`int` | `Message`):
+                The poll message or its ID.
+
+            text (`str`):
+                The text for the new answer option.
+
+            option (`bytes`):
+                A unique identifier for the option (e.g., b'\\x04').
+
+        Returns
+            The updated poll message.
+
+        Example
+            .. code-block:: python
+
+                # Add a new answer option to a poll
+                await client.add_poll_answer(chat, message_id, "Maybe", b'\\x05')
+        """
+        peer = await self.get_input_entity(peer)
+        msg_id = utils.get_message_id(message)
+
+        answer = types.PollAnswer(
+            text=types.TextWithEntities(text=text, entities=[]),
+            option=option,
+        )
+
+        return await self(
+            functions.messages.AddPollAnswerRequest(
+                peer=peer,
+                msg_id=msg_id,
+                answer=answer,
+            )
+        )
+
+    async def delete_poll_answer(
+        self: "TelegramClient",
+        peer: "hints.DialogLike",
+        message: "hints.MessageIDLike",
+        option: bytes,
+    ) -> "types.Message":
+        """
+        Removes an answer option from a poll. (Bot API 9.6)
+
+        Arguments
+            peer (`entity`):
+                The chat where the poll is located.
+
+            message (`int` | `Message`):
+                The poll message or its ID.
+
+            option (`bytes`):
+                The option bytes to remove.
+
+        Returns
+            The updated poll message.
+
+        Example
+            .. code-block:: python
+
+                # Remove an answer option from a poll
+                await client.delete_poll_answer(chat, message_id, b'\\x02')
+        """
+        peer = await self.get_input_entity(peer)
+        msg_id = utils.get_message_id(message)
+
+        return await self(
+            functions.messages.DeletePollAnswerRequest(
+                peer=peer,
+                msg_id=msg_id,
+                option=option,
+            )
+        )
+
     # endregion
 
     # endregion

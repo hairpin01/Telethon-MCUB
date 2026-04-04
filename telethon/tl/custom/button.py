@@ -507,3 +507,71 @@ class Button:
                 Custom emoji ID to use as button icon. Requires Telegram Premium.
         """
         return types.KeyboardButtonGame(text, style=_parse_style(style, icon))
+
+    @classmethod
+    def request_managed_bot(
+        cls,
+        text,
+        *,
+        suggested_name=None,
+        suggested_username=None,
+        resize=None,
+        single_use=None,
+        selective=None,
+        persistent=None,
+        placeholder=None,
+        style=None,
+        icon=None,
+    ):
+        """
+        Creates a new keyboard button to request the user to create a managed bot.
+        (Bot API 9.6)
+
+        The button allows users to create a new bot that will be managed by the
+        current bot. This requires the bot to have ``can_manage_bots`` capability.
+
+        Args:
+            text (`str`):
+                The title of the button.
+
+            suggested_name (`str`, optional):
+                Suggested name for the new bot.
+
+            suggested_username (`str`, optional):
+                Suggested username for the new bot.
+
+            resize, single_use, selective, persistent, placeholder:
+                Documented in `text`.
+
+            style (`str`, optional):
+                Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
+
+            icon (`int`, optional):
+                Custom emoji ID to use as button icon. Requires Telegram Premium.
+
+        Note:
+            This requires the bot to have ``can_manage_bots`` permission.
+            Currently uses RequestPeerTypeCreateBot when available in the API.
+        """
+        from .. import types as tl_types
+        
+        peer_type = tl_types.RequestPeerTypeCreateBot(
+            bot_managed=True,
+            suggested_name=suggested_name,
+            suggested_username=suggested_username,
+        )
+        
+        return cls(
+            tl_types.KeyboardButtonRequestPeer(
+                text=text,
+                button_id=0,
+                peer_type=peer_type,
+                max_quantity=1,
+                style=_parse_style(style, icon),
+            ),
+            resize=resize,
+            single_use=single_use,
+            selective=selective,
+            persistent=persistent,
+            placeholder=placeholder,
+        )
