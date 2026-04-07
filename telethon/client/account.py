@@ -3,8 +3,8 @@ import inspect
 import typing
 
 from .users import _NOT_A_REQUEST
-from .. import helpers, utils
-from ..tl import functions, TLRequest
+from .. import helpers, utils, hints
+from ..tl import functions, types, TLRequest
 
 if typing.TYPE_CHECKING:
     from .telegramclient import TelegramClient
@@ -109,6 +109,80 @@ class _TakeoutClient:
 
 
 class AccountMethods:
+    async def _to_input_document(
+        self: "TelegramClient",
+        file: "hints.FileLike",
+        *,
+        upload_peer: "hints.EntityLike" = "me",
+        cleanup: bool = True,
+    ) -> "types.TypeInputDocument":
+        """Resolve *file* into :tl:`InputDocument`, uploading if needed.
+
+        Files that are not already server-side documents are uploaded to
+        *upload_peer* (defaults to Saved Messages). The temporary message is
+        removed when ``cleanup`` is True.
+        """
+
+        try:
+            return utils.get_input_document(file)
+        except TypeError:
+            pass
+
+        peer = await self.get_input_entity(upload_peer)
+        message = await self.send_file(peer, file, silent=True)
+        if isinstance(message, list):
+            message = message[0]
+
+        input_doc = utils.get_input_document(message)
+
+        if cleanup and isinstance(message, types.Message):
+            await self.delete_messages(peer, message)
+
+        return input_doc
+
+    async def add_profile_music(
+        self: "TelegramClient",
+        file: "hints.FileLike",
+        *,
+        after: typing.Optional["hints.FileLike"] = None,
+        upload_peer: "hints.EntityLike" = "me",
+        cleanup_upload: bool = True,
+    ) -> bool:
+        """Add an audio track to your profile's Saved Music list.
+
+        Args:
+            file: Audio document, message with audio, or any file-like value
+                accepted by ``send_file``.
+            after: Optional existing track after which the new one should be
+                placed. If omitted, the track is appended to the top.
+            upload_peer: Where to upload the file if it's not yet a document.
+                Defaults to ``"me"`` (Saved Messages).
+            cleanup_upload: Delete the temporary upload message when created.
+
+        Returns:
+            ``True`` on success, ``False`` otherwise.
+        """
+
+        input_doc = await self._to_input_document(
+            file, upload_peer=upload_peer, cleanup=cleanup_upload
+        )
+        after_doc = (
+            await self._to_input_document(after, upload_peer=upload_peer, cleanup=False)
+            if after is not None
+            else None
+        )
+
+        return await self(functions.account.SaveMusicRequest(id=input_doc, after_id=after_doc))
+
+    async def remove_profile_music(
+        self: "TelegramClient",
+        file: "hints.FileLike",
+    ) -> bool:
+        """Remove a track from your profile's Saved Music list."""
+
+        input_doc = await self._to_input_document(file, upload_peer="me", cleanup=False)
+        return await self(functions.account.SaveMusicRequest(id=input_doc, unsave=True))
+
     def takeout(
         self: "TelegramClient",
         finalize: bool = True,
