@@ -183,6 +183,93 @@ class AccountMethods:
         input_doc = await self._to_input_document(file, upload_peer="me", cleanup=False)
         return await self(functions.account.SaveMusicRequest(id=input_doc, unsave=True))
 
+    async def move_profile_music(
+        self: "TelegramClient",
+        file: "hints.FileLike",
+        *,
+        after: typing.Optional["hints.FileLike"] = None,
+    ) -> bool:
+        """Reposition an existing track in Saved Music (remove then re-add)."""
+
+        input_doc = await self._to_input_document(file, upload_peer="me", cleanup=False)
+        after_doc = (
+            await self._to_input_document(after, upload_peer="me", cleanup=False)
+            if after is not None
+            else None
+        )
+
+        # Remove first, then insert at new position
+        await self(functions.account.SaveMusicRequest(id=input_doc, unsave=True))
+        return await self(functions.account.SaveMusicRequest(id=input_doc, after_id=after_doc))
+
+    async def add_profile_album(
+        self: "TelegramClient",
+        files: typing.Iterable["hints.FileLike"],
+        *,
+        upload_peer: "hints.EntityLike" = "me",
+        cleanup_upload: bool = True,
+        preserve_order: bool = True,
+    ) -> typing.List[bool]:
+        """Add multiple tracks, optionally preserving provided order."""
+
+        results = []
+        after_doc = None
+        for file in files:
+            input_doc = await self._to_input_document(
+                file, upload_peer=upload_peer, cleanup=cleanup_upload
+            )
+            ok = await self(functions.account.SaveMusicRequest(id=input_doc, after_id=after_doc))
+            results.append(ok)
+            if preserve_order:
+                after_doc = input_doc
+        return results
+
+    async def get_saved_music_ids(self: "TelegramClient", hash: int = 0):
+        """Fetch IDs of saved music for caching-friendly checks."""
+
+        return await self(functions.account.GetSavedMusicIdsRequest(hash=hash))
+
+    async def iter_saved_music(
+        self: "TelegramClient",
+        *,
+        user: "hints.EntityLike" = "me",
+        offset: int = 0,
+        limit: typing.Optional[int] = None,
+        batch_size: int = 100,
+        hash: int = 0,
+    ) -> "typing.AsyncGenerator[types.Document, None]":
+        """Iterate saved music documents with pagination."""
+
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+
+        remaining = limit
+        current_offset = offset
+        input_user = await self.get_input_entity(user)
+
+        while True:
+            fetch = batch_size if remaining is None else min(batch_size, remaining)
+            page = await self(
+                functions.users.GetSavedMusicRequest(
+                    id=input_user, offset=current_offset, limit=fetch, hash=hash
+                )
+            )
+
+            docs = getattr(page, "documents", None) or []
+            if not docs:
+                return
+
+            for doc in docs:
+                yield doc
+                current_offset += 1
+                if remaining is not None:
+                    remaining -= 1
+                    if remaining <= 0:
+                        return
+
+            if len(docs) < fetch:
+                return
+
     def takeout(
         self: "TelegramClient",
         finalize: bool = True,
