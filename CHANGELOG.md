@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## v1.43.15 (2026-05-11)
+
+### Event Dispatch / MCUB Reload Safety
+
+- Fixed `UpdateMethods.add_event_handler()` so the event type dispatch cache is invalidated instead of being incrementally updated. This prevents reload/install flows from leaving `_event_builders_by_type` non-empty but incomplete after `remove_event_handler()`, which could skip surviving core `NewMessage` handlers.
+
+### MCUB Compatibility
+
+- Preserved existing MCUB compatibility changes for dict-style buttons, `invert_media` forwarding, and reply media aliases.
+
 ### Premium Emoji Support in Buttons
 
 - Added `icon` parameter to all Button helper methods for custom emoji support.

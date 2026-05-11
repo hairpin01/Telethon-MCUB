@@ -336,9 +336,13 @@ class Message(ChatGetter, SenderGetter, TLObject):
 
         cache = client._mb_entity_cache
 
-        self._sender, self._input_sender = utils._get_entity_pair(self.sender_id, entities, cache)
+        self._sender, self._input_sender = utils._get_entity_pair(
+            self.sender_id, entities, cache
+        )
 
-        self._chat, self._input_chat = utils._get_entity_pair(self.chat_id, entities, cache)
+        self._chat, self._input_chat = utils._get_entity_pair(
+            self.chat_id, entities, cache
+        )
 
         if input_chat:  # This has priority
             self._input_chat = input_chat
@@ -353,7 +357,8 @@ class Message(ChatGetter, SenderGetter, TLObject):
 
         if self.action:
             if isinstance(
-                self.action, (types.MessageActionChatAddUser, types.MessageActionChatCreate)
+                self.action,
+                (types.MessageActionChatAddUser, types.MessageActionChatCreate),
             ):
                 self._action_entities = [entities.get(i) for i in self.action.users]
             elif isinstance(self.action, types.MessageActionChatDeleteUser):
@@ -362,7 +367,9 @@ class Message(ChatGetter, SenderGetter, TLObject):
                 self._action_entities = [entities.get(self.action.inviter_id)]
             elif isinstance(self.action, types.MessageActionChatMigrateTo):
                 self._action_entities = [
-                    entities.get(utils.get_peer_id(types.PeerChannel(self.action.channel_id)))
+                    entities.get(
+                        utils.get_peer_id(types.PeerChannel(self.action.channel_id))
+                    )
                 ]
             elif isinstance(self.action, types.MessageActionChannelMigrateFrom):
                 self._action_entities = [
@@ -533,8 +540,12 @@ class Message(ChatGetter, SenderGetter, TLObject):
         Returns the total button count (sum of all `buttons` rows).
         """
         if self._buttons_count is None:
-            if isinstance(self.reply_markup, (types.ReplyInlineMarkup, types.ReplyKeyboardMarkup)):
-                self._buttons_count = sum(len(row.buttons) for row in self.reply_markup.rows)
+            if isinstance(
+                self.reply_markup, (types.ReplyInlineMarkup, types.ReplyKeyboardMarkup)
+            ):
+                self._buttons_count = sum(
+                    len(row.buttons) for row in self.reply_markup.rows
+                )
             else:
                 self._buttons_count = 0
 
@@ -614,7 +625,9 @@ class Message(ChatGetter, SenderGetter, TLObject):
         """
         The :tl:`Document` media in this message, if it's a voice note.
         """
-        return self._document_by_attribute(types.DocumentAttributeAudio, lambda attr: attr.voice)
+        return self._document_by_attribute(
+            types.DocumentAttributeAudio, lambda attr: attr.voice
+        )
 
     @property
     def video(self):
@@ -672,7 +685,8 @@ class Message(ChatGetter, SenderGetter, TLObject):
         The :tl:`GeoPoint` media in this message, if it has a location.
         """
         if isinstance(
-            self.media, (types.MessageMediaGeo, types.MessageMediaGeoLive, types.MessageMediaVenue)
+            self.media,
+            (types.MessageMediaGeo, types.MessageMediaGeoLive, types.MessageMediaVenue),
         ):
             return self.media.geo
 
@@ -832,7 +846,8 @@ class Message(ChatGetter, SenderGetter, TLObject):
                 # If that's the case, give it a second chance accessing
                 # directly by its ID.
                 self._reply_message = await self._client.get_messages(
-                    self._input_chat if self.is_channel else None, ids=self.reply_to.reply_to_msg_id
+                    self._input_chat if self.is_channel else None,
+                    ids=self.reply_to.reply_to_msg_id,
                 )
 
         return self._reply_message
@@ -844,7 +859,9 @@ class Message(ChatGetter, SenderGetter, TLObject):
         with ``entity`` already set.
         """
         if self._client:
-            return await self._client.send_message(await self.get_input_chat(), *args, **kwargs)
+            return await self._client.send_message(
+                await self.get_input_chat(), *args, **kwargs
+            )
 
     async def reply(self, *args, **kwargs):
         """
@@ -854,7 +871,9 @@ class Message(ChatGetter, SenderGetter, TLObject):
         """
         if self._client:
             kwargs["reply_to"] = self.id
-            return await self._client.send_message(await self.get_input_chat(), *args, **kwargs)
+            return await self._client.send_message(
+                await self.get_input_chat(), *args, **kwargs
+            )
 
     async def answer(self, *args, **kwargs):
         """
@@ -916,6 +935,10 @@ class Message(ChatGetter, SenderGetter, TLObject):
             This is generally the most desired and convenient behaviour,
             and will work for link previews and message buttons.
         """
+        if "reply_markup" in kwargs:
+            kwargs["buttons"] = kwargs.pop("reply_markup")
+        if "photo" in kwargs:
+            kwargs["file"] = kwargs.pop("photo")
         if "link_preview" not in kwargs:
             kwargs["link_preview"] = bool(self.web_preview)
         if "buttons" not in kwargs:
@@ -1087,7 +1110,10 @@ class Message(ChatGetter, SenderGetter, TLObject):
 
             but = types.KeyboardButtonCallback("", data)
             return await MessageButton(self._client, but, chat, None, self.id).click(
-                share_phone=share_phone, share_geo=share_geo, password=password, open_url=open_url
+                share_phone=share_phone,
+                share_geo=share_geo,
+                password=password,
+                open_url=open_url,
             )
 
         if sum(int(x is not None) for x in (i, text, filter)) >= 2:
@@ -1160,7 +1186,10 @@ class Message(ChatGetter, SenderGetter, TLObject):
         button = find_button()
         if button:
             return await button.click(
-                share_phone=share_phone, share_geo=share_geo, password=password, open_url=open_url
+                share_phone=share_phone,
+                share_geo=share_geo,
+                password=password,
+                open_url=open_url,
             )
 
     async def mark_read(self):
@@ -1171,7 +1200,9 @@ class Message(ChatGetter, SenderGetter, TLObject):
         with both ``entity`` and ``message`` already set.
         """
         if self._client:
-            await self._client.send_read_acknowledge(await self.get_input_chat(), max_id=self.id)
+            await self._client.send_read_acknowledge(
+                await self.get_input_chat(), max_id=self.id
+            )
 
     async def pin(self, *, notify=False, pm_oneside=False):
         """
@@ -1184,7 +1215,10 @@ class Message(ChatGetter, SenderGetter, TLObject):
         #      That or figure out a way to always set it directly.
         if self._client:
             return await self._client.pin_message(
-                await self.get_input_chat(), self.id, notify=notify, pm_oneside=pm_oneside
+                await self.get_input_chat(),
+                self.id,
+                notify=notify,
+                pm_oneside=pm_oneside,
             )
 
     async def unpin(self):
@@ -1194,7 +1228,9 @@ class Message(ChatGetter, SenderGetter, TLObject):
         with both ``entity`` and ``message`` already set.
         """
         if self._client:
-            return await self._client.unpin_message(await self.get_input_chat(), self.id)
+            return await self._client.unpin_message(
+                await self.get_input_chat(), self.id
+            )
 
     # endregion Public Methods
 
@@ -1236,7 +1272,10 @@ class Message(ChatGetter, SenderGetter, TLObject):
             self.reply_markup, (types.ReplyInlineMarkup, types.ReplyKeyboardMarkup)
         ):
             self._buttons = [
-                [MessageButton(self._client, button, chat, bot, self.id) for button in row.buttons]
+                [
+                    MessageButton(self._client, button, chat, bot, self.id)
+                    for button in row.buttons
+                ]
                 for row in self.reply_markup.rows
             ]
             self._buttons_flat = [x for row in self._buttons for x in row]

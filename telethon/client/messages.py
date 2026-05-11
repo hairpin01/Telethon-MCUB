@@ -696,6 +696,7 @@ class MessageMethods:
         state_store=None,
         send_as: typing.Optional["hints.EntityLike"] = None,
         message_effect_id: typing.Optional[int] = None,
+        invert_media: bool = False
     ) -> "types.Message":
         """
         Sends a message to the specified user, chat or channel.
@@ -915,6 +916,7 @@ class MessageMethods:
                 state_store=state_store,
                 send_as=send_as,
                 message_effect_id=message_effect_id,
+                invert_media=invert_media,
             )
 
         entity = await self.get_input_entity(entity)

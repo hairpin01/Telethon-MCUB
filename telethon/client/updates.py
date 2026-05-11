@@ -213,9 +213,11 @@ class UpdateMethods:
         if builders is not None:
             for ev in builders:
                 self._event_builders.append((ev, callback))
-                self._event_builders_by_type.setdefault(type(ev), []).append(
-                    (ev, callback)
-                )
+            # Keep the type cache as a pure dispatch cache.  It may have been
+            # cleared by ``remove_event_handler`` during a module reload; if we
+            # only append the new handler here, the cache becomes non-empty but
+            # incomplete, so existing core handlers are skipped by dispatch.
+            self._event_builders_by_type.clear()
             return
 
         if isinstance(event, type):
@@ -224,9 +226,10 @@ class UpdateMethods:
             event = events.Raw()
 
         self._event_builders.append((event, callback))
-        self._event_builders_by_type.setdefault(type(event), []).append(
-            (event, callback)
-        )
+        # Mark the dispatch cache dirty.  The next update will rebuild it from
+        # the authoritative ``_event_builders`` list, preserving handlers that
+        # survived a module unload/reload.
+        self._event_builders_by_type.clear()
 
         # Track handler by module for cleanup
         if not module_name:

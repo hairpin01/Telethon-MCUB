@@ -61,6 +61,8 @@ class ButtonMethods:
         for row in buttons:
             current = []
             for button in row:
+                if isinstance(button, dict):
+                    continue
                 if isinstance(button, custom.Button):
                     if button.resize is not None:
                         resize = button.resize
