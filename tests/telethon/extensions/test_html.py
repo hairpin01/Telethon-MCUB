@@ -184,7 +184,7 @@ def test_parse_mismatched_unknown_closing_tag_is_kept_as_plain_text():
 
 
 def test_parse_non_ascii_tag_names_are_kept_as_plain_text():
-    source = "<ьоашщвыоагвшыоашгщыашгщоашгщфывошаоывшщао>abc</авлашзщ>"
+    source = "<ьoaшщвыoaгвшыoaшгщыaшгщoaшгщфывoшaoывшщao>abc</aвлaшзщ>"
     text, entities = html.parse(source)
     assert text == source
     assert entities == []

@@ -112,11 +112,11 @@ class ProtectionPolicy:
     dry_run: bool = False
     log_blocked: bool = True
     raise_on_blocked: bool = True
-    # Custom callback – invoked on every violation before any potential raise
+    # Custom callback - invoked on every violation before any potential raise
     on_violation: Optional[Callable[["ProtectionViolation"], None]] = field(
         default=None, compare=False, hash=False, repr=False
     )
-    # Computed fields – populated in __post_init__ via object.__setattr__
+    # Computed fields - populated in __post_init__ via object.__setattr__
     blocked_request_ids: frozenset[int] = field(init=False, repr=False)
     allowed_request_ids: frozenset[int] = field(init=False, repr=False)
 
@@ -308,7 +308,7 @@ def check_request_safety(
     Check *request* against the policy. Returns a ProtectionViolation on a
     hit, or ``None`` if the request is safe.
 
-    Logging and the on_violation callback are fired here – before any raise –
+    Logging and the on_violation callback are fired here - before any raise -
     so they always run regardless of whether assert_safe or this function is
     called directly.
     """
@@ -379,7 +379,7 @@ def protect_client(
 
     original_call = type(client).__call__
 
-    # Per-instance subclass – avoids polluting the base TelegramClient class
+    # Per-instance subclass - avoids polluting the base TelegramClient class
     protected_class = type(
         f"Protected{type(client).__name__}",
         (type(client),),

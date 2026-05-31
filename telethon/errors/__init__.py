@@ -24,7 +24,7 @@ from .rpcerrorlist import *
 
 
 def _check_mcub_installation():
-    """Проверка что установлен telethon-mcub. Вызывается ядрами MCUB-fork."""
+    """Пpoвepкa чтo ycтaнoвлeн telethon-mcub. Вызывaeтcя ядpaми MCUB-fork."""
     pass
 
 

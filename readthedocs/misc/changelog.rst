@@ -2155,7 +2155,7 @@ Enhancements
 * `iter_participants <telethon.client.chats.ChatMethods.iter_participants>`
   will now use its ``search=`` as a symbol set when ``aggressive=True``,
   so you can do ``client.get_participants(group, aggressive=True,
-  search='абвгдеёжзийклмнопрст')``.
+  search='aбвгдeёжзийклмнoпpcт')``.
 * The ``StringSession`` supports custom encoding.
 * Callbacks for `telethon.client.auth.AuthMethods.start` can be ``async``.
 
@@ -3920,7 +3920,7 @@ Enhancements
 -  ``ProxyConnectionError`` should properly be passed to the main thread
    for you to handle.
 -  The background thread will only be started after you're authorized on
-   Telegram (i.e. logged in), and several other attempts at polishing
+   Telegram (i.e.logged in), and several other attempts at polishing
    the experience with this thread.
 -  The ``Connection`` instance is only created once now, and reused
    later.
@@ -4189,7 +4189,7 @@ hand-crafted version.
 Hope the new, super simple ``README.rst`` encourages people to use
 Telethon and make it better with either suggestions, or pull request.
 Pull requests are *super* appreciated, but showing some support by
-leaving a star also feels nice ⭐️.
+leaving a star also feels nice ⭐.
 
 Newbie friendly update (v0.12)
 ==============================

@@ -45,7 +45,7 @@ class MiddlewareManager:
 
         async def build_chain(index: int):
             if index >= len(self._middlewares):
-                # end of chain — call the actual handler
+                # end of chain - call the actual handler
                 return await handler(event)
 
             async def call_next():
