@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from telethon.tl import TLRequest
 from telethon.tl.functions.account import (
@@ -11,19 +11,31 @@ from telethon.tl.functions.account import (
     DeleteAccountRequest,
     FinishTakeoutSessionRequest,
     GetAuthorizationsRequest,
+    GetPasswordRequest,
+    GetTmpPasswordRequest,
     GetWebAuthorizationsRequest,
     InitTakeoutSessionRequest,
     ResetAuthorizationRequest,
     ResetPasswordRequest,
+    ResetWebAuthorizationRequest,
     ResetWebAuthorizationsRequest,
     UpdatePasswordSettingsRequest,
 )
 from telethon.tl.functions.auth import (
     BindTempAuthKeyRequest,
+    DropTempAuthKeysRequest,
+    # ExportAuthorizationRequest,
     ImportAuthorizationRequest,
     LogOutRequest,
     ResetAuthorizationsRequest,
 )
+from telethon.tl.functions.payments import (
+    SendPaymentFormRequest,
+    SendStarsFormRequest,
+)
+
+if TYPE_CHECKING:
+    from telethon import TelegramClient
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +51,12 @@ SAFE_DANGEROUS_REQUESTS: tuple[type[TLRequest], ...] = (
     DeleteAccountRequest,
     ResetAuthorizationRequest,
     ResetAuthorizationsRequest,
+    ResetWebAuthorizationRequest,
     ResetWebAuthorizationsRequest,
     BindTempAuthKeyRequest,
+    DropTempAuthKeysRequest,
+    # ExportAuthorizationRequest,
+    # Why the comment? how are you going to export the session to another DC in order to download the file??
     ImportAuthorizationRequest,
     InitTakeoutSessionRequest,
     FinishTakeoutSessionRequest,
@@ -54,9 +70,13 @@ STRICT_DANGEROUS_REQUESTS: tuple[type[TLRequest], ...] = (
     *SAFE_DANGEROUS_REQUESTS,
     GetWebAuthorizationsRequest,
     GetAuthorizationsRequest,
+    GetPasswordRequest,
+    GetTmpPasswordRequest,
+    SendStarsFormRequest,
+    SendPaymentFormRequest,
 )
 
-# Backward-compatible aliases for callers that relied on the old names.
+# Backward-compatible aliases
 DANGEROUS_REQUESTS = STRICT_DANGEROUS_REQUESTS
 DANGEROUS_REQUEST_IDS = frozenset(r.CONSTRUCTOR_ID for r in DANGEROUS_REQUESTS)
 
@@ -65,14 +85,16 @@ def _normalize_request_types(requests, field_name: str) -> tuple[type[TLRequest]
     if not requests:
         return ()
 
-    result = []
-    seen = set()
+    result: list[type[TLRequest]] = []
+    seen: set[type[TLRequest]] = set()
     for request in requests:
         if isinstance(request, TLRequest):
             request = type(request)
 
         if not isinstance(request, type) or not issubclass(request, TLRequest):
-            raise TypeError(f"{field_name} must contain TLRequest subclasses or instances")
+            raise TypeError(
+                f"{field_name} must contain TLRequest subclasses or instances"
+            )
 
         if request not in seen:
             seen.add(request)
@@ -90,10 +112,15 @@ class ProtectionPolicy:
     dry_run: bool = False
     log_blocked: bool = True
     raise_on_blocked: bool = True
+    # Custom callback – invoked on every violation before any potential raise
+    on_violation: Optional[Callable[["ProtectionViolation"], None]] = field(
+        default=None, compare=False, hash=False, repr=False
+    )
+    # Computed fields – populated in __post_init__ via object.__setattr__
     blocked_request_ids: frozenset[int] = field(init=False, repr=False)
     allowed_request_ids: frozenset[int] = field(init=False, repr=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.mode not in PROTECTION_MODES:
             raise ValueError(
                 f"Unknown protection mode {self.mode!r}. Expected one of: "
@@ -102,20 +129,20 @@ class ProtectionPolicy:
         if self.max_nesting_depth <= 0:
             raise ValueError("max_nesting_depth must be greater than zero")
 
-        blocked_requests = _normalize_request_types(self.blocked_requests, "blocked_requests")
-        allowed_requests = _normalize_request_types(self.allowed_requests, "allowed_requests")
+        blocked = _normalize_request_types(self.blocked_requests, "blocked_requests")
+        allowed = _normalize_request_types(self.allowed_requests, "allowed_requests")
 
-        object.__setattr__(self, "blocked_requests", blocked_requests)
-        object.__setattr__(self, "allowed_requests", allowed_requests)
+        object.__setattr__(self, "blocked_requests", blocked)
+        object.__setattr__(self, "allowed_requests", allowed)
         object.__setattr__(
             self,
             "blocked_request_ids",
-            frozenset(request.CONSTRUCTOR_ID for request in blocked_requests),
+            frozenset(r.CONSTRUCTOR_ID for r in blocked),
         )
         object.__setattr__(
             self,
             "allowed_request_ids",
-            frozenset(request.CONSTRUCTOR_ID for request in allowed_requests),
+            frozenset(r.CONSTRUCTOR_ID for r in allowed),
         )
 
     @property
@@ -168,10 +195,11 @@ def build_protection_policy(
     dry_run: bool = False,
     log_blocked: bool = True,
     raise_on_blocked: bool = True,
+    on_violation: Optional[Callable[[ProtectionViolation], None]] = None,
 ) -> ProtectionPolicy:
     mode = mode.lower()
     if mode == "off":
-        default_blocked = ()
+        default_blocked: tuple[type[TLRequest], ...] = ()
     elif mode == "safe":
         default_blocked = SAFE_DANGEROUS_REQUESTS
     elif mode in {"strict", "custom"}:
@@ -184,12 +212,15 @@ def build_protection_policy(
 
     return ProtectionPolicy(
         mode=mode,
-        blocked_requests=default_blocked if blocked_requests is None else blocked_requests,
+        blocked_requests=(
+            default_blocked if blocked_requests is None else blocked_requests
+        ),
         allowed_requests=() if allowed_requests is None else allowed_requests,
         max_nesting_depth=max_nesting_depth,
         dry_run=dry_run,
         log_blocked=log_blocked,
         raise_on_blocked=raise_on_blocked,
+        on_violation=on_violation,
     )
 
 
@@ -199,10 +230,10 @@ DEFAULT_PROTECTION_POLICY = build_protection_policy("strict")
 def find_dangerous_request(
     request: TLRequest,
     *,
-    policy: ProtectionPolicy = None,
-    blocked_request_ids: frozenset[int] = None,
-    allowed_request_ids: frozenset[int] = None,
-    max_nesting_depth: int = None,
+    policy: ProtectionPolicy | None = None,
+    blocked_request_ids: frozenset[int] | None = None,
+    allowed_request_ids: frozenset[int] | None = None,
+    max_nesting_depth: int | None = None,
 ) -> Optional[TLRequest]:
     """
     Find a blacklisted request even when it is wrapped inside ``Invoke*``
@@ -257,7 +288,9 @@ def find_dangerous_request(
             value = getattr(current, attr, None)
             if isinstance(value, Mapping):
                 value = value.values()
-            elif isinstance(value, (str, bytes, bytearray)) or not isinstance(value, Iterable):
+            elif isinstance(value, (str, bytes, bytearray)) or not isinstance(
+                value, Iterable
+            ):
                 continue
 
             for inner in value:
@@ -268,28 +301,98 @@ def find_dangerous_request(
 
 
 def check_request_safety(
-    request: TLRequest, policy: ProtectionPolicy = None
+    request: TLRequest,
+    policy: ProtectionPolicy | None = None,
 ) -> Optional[ProtectionViolation]:
+    """
+    Check *request* against the policy. Returns a ProtectionViolation on a
+    hit, or ``None`` if the request is safe.
+
+    Logging and the on_violation callback are fired here – before any raise –
+    so they always run regardless of whether assert_safe or this function is
+    called directly.
+    """
     policy = policy or DEFAULT_PROTECTION_POLICY
     dangerous = find_dangerous_request(request, policy=policy)
     if dangerous is None:
         return None
 
-    return ProtectionViolation(
+    violation = ProtectionViolation(
         request=request,
         dangerous_request=dangerous,
         policy=policy,
     )
 
+    # Log before any potential raise so the message is never silently swallowed
+    if policy.log_blocked:
+        logger.warning(violation.log_message)
 
-def assert_safe(request: TLRequest, policy: ProtectionPolicy = None) -> None:
+    if policy.on_violation is not None:
+        try:
+            policy.on_violation(violation)
+        except Exception:
+            logger.exception("on_violation callback raised an exception")
+
+    return violation
+
+
+def assert_safe(request: TLRequest, policy: ProtectionPolicy | None = None) -> None:
     """
     Raise :class:`ScamModuleDetected` if *request* (or any request nested
-    inside it) is on the blacklist, or if the nesting depth exceeds the
-    configured limit.
+    inside it) is on the blocklist, or if the nesting depth exceeds the
+    configured limit. No-op for safe requests.
     """
     violation = check_request_safety(request, policy=policy)
     if violation is not None and violation.policy.should_block:
         raise ScamModuleDetected(violation.message)
-    if violation is not None and violation.policy.log_blocked:
-        logger.warning(violation.log_message)
+
+
+def protect_client(
+    client: "TelegramClient",
+    policy: ProtectionPolicy | None = None,
+) -> None:
+    """
+    Patch *client* so that every outgoing Telegram API call is checked
+    against *policy* via assert_safe before being sent.
+
+    Uses a per-instance dynamic subclass so other TelegramClient instances
+    in the same process are not affected.
+
+    The original ``__call__`` is preserved as ``client._unprotected_call``
+    for debugging or explicit bypass.
+
+    Usage::
+
+        client = TelegramClient(...)
+        protect_client(client, build_protection_policy("strict"))
+    """
+    policy = policy or DEFAULT_PROTECTION_POLICY
+
+    if hasattr(client, "_protection_policy"):
+        logger.warning(
+            "protect_client: client already protected (mode=%s). Updating policy to mode=%s.",
+            client._protection_policy.mode,  # type: ignore[attr-defined]
+            policy.mode,
+        )
+        client._protection_policy = policy  # type: ignore[attr-defined]
+        return
+
+    original_call = type(client).__call__
+
+    # Per-instance subclass – avoids polluting the base TelegramClient class
+    protected_class = type(
+        f"Protected{type(client).__name__}",
+        (type(client),),
+        {},
+    )
+
+    async def _protected_call(self, request, ordered=False, flood_sleep_threshold=None):
+        assert_safe(request, self._protection_policy)  # type: ignore[attr-defined]
+        return await original_call(
+            self, request, ordered=ordered, flood_sleep_threshold=flood_sleep_threshold
+        )
+
+    protected_class.__call__ = _protected_call  # type: ignore[method-assign]
+    client.__class__ = protected_class  # type: ignore[assignment]
+    client._protection_policy = policy  # type: ignore[attr-defined]
+    client._unprotected_call = original_call  # type: ignore[attr-defined]
