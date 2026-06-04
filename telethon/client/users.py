@@ -35,6 +35,10 @@ def _fmt_flood(delay, request, *, early=False, td=datetime.timedelta):
 
 
 class UserMethods:
+    # Captured at import time — immune to monkey-patching of
+    # telethon.client.protection.check_request_safety
+    _check_request_safety = staticmethod(check_request_safety)
+
     @property
     def protection_mode(self: "TelegramClient") -> str:
         return self._protection_policy.mode
@@ -110,11 +114,13 @@ class UserMethods:
         else:
             requests = [request]
 
+        _check_safety = self.__class__._check_request_safety  # capture at class level
+
         for i, r in enumerate(requests):
             if not isinstance(r, TLRequest):
                 raise _NOT_A_REQUEST()
 
-            violation = check_request_safety(r, self._protection_policy)
+            violation = _check_safety(r, self._protection_policy)
             if violation is not None:
                 if report_violations:
                     await self._handle_protection_violation(violation)
