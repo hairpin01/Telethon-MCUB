@@ -1,5 +1,9 @@
-Telethon-MCUB
-=============
+.. |tmcub_emoji| image:: https://raw.githubusercontent.com/hairpin01/Telethon-MCUB/v1/assets/emoji.webp
+   :width: 32
+   :alt: 🚀
+
+|tmcub_emoji| Telethon-MCUB
+===========================
 
 Telethon-MCUB is a maintained Telethon fork for MCUB and userbot-oriented
 workloads. The Python import path remains ``telethon``, but the package name
