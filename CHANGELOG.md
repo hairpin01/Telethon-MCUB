@@ -1,5 +1,11 @@
 # Telethon-MCUB Changelog
 
+## v1.43.18 (2026-06-07)
+
+### Bugfix
+
+- Fixed `UnboundLocalError: cannot access local variable 'warnings'` in `TelegramBaseClient.__init__` when a proxy is configured and `python-socks` is not installed. The redundant local `import warnings` inside an `if isinstance(session, ...)` block shadowed the module-level import, causing Python to treat `warnings` as a local variable for the entire method. Removed the local import — the module-level import is sufficient. (MCUB userbot report)
+
 ## Unreleased
 
 ## v1.43.15 (2026-05-11)

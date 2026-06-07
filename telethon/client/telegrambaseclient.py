@@ -310,8 +310,7 @@ class TelegramBaseClient(abc.ABC):
             try:
                 session = SQLiteSession(str(session))
             except ImportError:
-                import warnings
-
+                session = MemorySession()
                 warnings.warn(
                     "The sqlite3 module is not available under this "
                     "Python installation and no custom session "
@@ -319,7 +318,6 @@ class TelegramBaseClient(abc.ABC):
                     "You will need to re-login every time unless "
                     "you use another session storage"
                 )
-                session = MemorySession()
         elif session is None:
             session = MemorySession()
         elif not isinstance(session, Session):
