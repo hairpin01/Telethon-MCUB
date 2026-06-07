@@ -1,12 +1,16 @@
 # Telethon-MCUB Changelog
 
-## v1.43.18 (2026-06-07)
+## v1.43.18 (2026-06-08)
 
 ### Bugfix
 
 - Fixed `UnboundLocalError: cannot access local variable 'warnings'` in `TelegramBaseClient.__init__` when a proxy is configured and `python-socks` is not installed. The redundant local `import warnings` inside an `if isinstance(session, ...)` block shadowed the module-level import, causing Python to treat `warnings` as a local variable for the entire method. Removed the local import — the module-level import is sufficient. (MCUB userbot report)
 
 ## Unreleased
+
+### Bugfix
+
+- Fixed `TypeError: Invalid message type: <class 'telethon.tl.types.MessageReplyHeader'>` in `get_message_id` when `reply_to` is a `MessageReplyHeader` object (forum topic reply). The function now extracts the topic ID (`reply_to_top_id`) or replied-to message ID (`reply_to_msg_id`) from the header.
 
 ## v1.43.15 (2026-05-11)
 

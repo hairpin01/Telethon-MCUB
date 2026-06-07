@@ -631,6 +631,12 @@ def get_message_id(message):
     except AttributeError:
         pass
 
+    # Handle MessageReplyHeader for forum topics / replies
+    if hasattr(message, "reply_to_top_id") and message.reply_to_top_id:
+        return message.reply_to_top_id
+    if hasattr(message, "reply_to_msg_id"):
+        return message.reply_to_msg_id
+
     raise TypeError("Invalid message type: {}".format(type(message)))
 
 
