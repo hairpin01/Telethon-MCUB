@@ -82,6 +82,7 @@ class TestMessageMethods:
                 comment_to=None, background=None, nosound_video=None,
                 resume=False, resume_key=None, state_store=None,
                 send_as=None, message_effect_id=None,
+                invert_media=False,
             )
             assert result == expected_result
 
