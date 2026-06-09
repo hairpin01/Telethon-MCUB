@@ -8,6 +8,10 @@
 
 ## Unreleased
 
+### Feature
+
+- Added `client.convert_emoji` toggle — when enabled (`True`), `<tg-emoji emoji-id="ID">content</tg-emoji>` tags in HTML messages are automatically converted to `<a href="tg://emoji?id=ID">content</a>` links. This allows non-premium accounts to send messages with premium emoji references without triggering API errors. Manual activation only (`client.convert_emoji = True`), no automatic detection.
+
 ### Bugfix
 
 - Fixed `TypeError: Invalid message type: <class 'telethon.tl.types.MessageReplyHeader'>` in `get_message_id` when `reply_to` is a `MessageReplyHeader` object (forum topic reply). The function now extracts the topic ID (`reply_to_top_id`) or replied-to message ID (`reply_to_msg_id`) from the header.

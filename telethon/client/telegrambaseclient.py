@@ -434,6 +434,9 @@ class TelegramBaseClient(abc.ABC):
         # Default parse mode
         self._parse_mode = markdown
 
+        # Whether to convert <tg-emoji> to <a> links for non-premium users
+        self._convert_emoji = False
+
         # Some fields to easy signing in. Let {phone: hash} be
         # a dictionary because the user may change their mind.
         self._phone_code_hash = {}
