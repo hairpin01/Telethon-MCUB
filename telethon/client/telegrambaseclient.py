@@ -437,6 +437,9 @@ class TelegramBaseClient(abc.ABC):
         # Whether to convert <tg-emoji> to <a> links for non-premium users
         self._convert_emoji = False
 
+        # Message pre-processing hooks (MCUB dispatcher etc.)
+        self._message_hooks: list[tuple[int, typing.Callable]] = []
+
         # Some fields to easy signing in. Let {phone: hash} be
         # a dictionary because the user may change their mind.
         self._phone_code_hash = {}

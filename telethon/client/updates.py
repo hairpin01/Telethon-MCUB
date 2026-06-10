@@ -38,6 +38,28 @@ Callback = typing.Callable[[typing.Any], typing.Any]
 class UpdateMethods:
     # region Public methods
 
+    def add_message_hook(
+        self: "TelegramClient",
+        hook: Callable[[typing.Any], typing.Awaitable[bool]],
+        priority: int = 0,
+    ):
+        """Register a pre-processing hook for all incoming messages.
+
+        Hooks are called **before** regular event handlers, in priority
+        order (higher = sooner). Each hook receives the built event and
+        must return ``True`` to let the event continue through the chain,
+        or ``False`` to stop propagation (event consumed).
+
+        This is the intended integration point for MCUB's command
+        dispatcher and other message-pipeline consumers.
+        """
+        self._message_hooks.append((priority, hook))
+        self._message_hooks.sort(key=lambda x: x[0], reverse=True)
+
+    def remove_message_hook(self: "TelegramClient", hook: Callable):
+        """Remove a previously registered message hook."""
+        self._message_hooks[:] = [(p, h) for p, h in self._message_hooks if h is not hook]
+
     async def _run_until_disconnected(self: "TelegramClient"):
         try:
             # Make a high-level request to notify that we want updates
@@ -707,6 +729,30 @@ class UpdateMethods:
                 pass  # might not have connection
 
         built = EventBuilderDict(self, update, others)
+
+        # Run message pre-processing hooks (MCUB dispatcher etc.)
+        # Hooks receive the built NewMessage/MessageEdited event and
+        # return True to continue or False to stop propagation.
+        if self._message_hooks:
+            for event_type in (events.NewMessage, events.MessageEdited):
+                ev = built[event_type]
+                if ev is None:
+                    continue
+                for _priority, hook in self._message_hooks:
+                    try:
+                        ok = await hook(ev)
+                        if ok is False:
+                            break
+                    except Exception:
+                        self._log[__name__].exception(
+                            "Unhandled exception in message hook %s", hook
+                        )
+                        break
+                # If hook returned False for a message event,
+                # don't process further event types for this update
+                if ok is False:
+                    return
+
         for conv_set in self._conversations.values():
             for conv in conv_set:
                 ev = built[events.NewMessage]

@@ -14,6 +14,24 @@ _TG_EMOJI_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+# ── Auto-detect patterns ──────────────────────────────────────────
+
+# Telethon-supported HTML tags (opening tag check)
+_HTML_TAG_RE = re.compile(
+    r'<(b|strong|i|em|u|ins|s|strike|del|a|code|pre|blockquote|'
+    r'tg-spoiler|tg-emoji|emoji)[\s>]',
+    re.IGNORECASE,
+)
+
+# Telethon-default Markdown delimiters
+_MD_PATTERN_RE = re.compile(
+    r'(```[\s\S]*?```|`[^`\n]+?`|'
+    r'\*\*.+?\*\*|'
+    r'__(?!_)(.+?)__|'
+    r'~~.+?~~|'
+    r'\[.+?\]\(.+?\))'
+)
+
 
 class MessageParseMethods:
 
@@ -96,12 +114,27 @@ class MessageParseMethods:
         return _TG_EMOJI_RE.sub(
             r'<a href="tg://emoji?id=\1">\2</a>', text)
 
+    @staticmethod
+    def _detect_parse_mode(message: str):
+        if not message:
+            return None
+        has_html = bool(_HTML_TAG_RE.search(message))
+        has_md = bool(_MD_PATTERN_RE.search(message))
+        if has_html:
+            from ..extensions import html
+            return html
+        if has_md:
+            from ..extensions import markdown
+            return markdown
+        return None
+
     async def _parse_message_text(self: "TelegramClient", message, parse_mode):
         """
         Returns a (parsed message, entities) tuple depending on ``parse_mode``.
         """
         if parse_mode == ():
-            parse_mode = self._parse_mode
+            detected = self._detect_parse_mode(message)
+            parse_mode = detected if detected else self._parse_mode
         else:
             parse_mode = utils.sanitize_parse_mode(parse_mode)
 
