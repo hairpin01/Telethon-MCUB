@@ -168,7 +168,14 @@ class InlineResult:
             hide_via=hide_via,
             reply_to=None if reply_id is None else types.InputReplyToMessage(reply_id),
         )
-        return self._client._get_response_message(req, await self._client(req), entity)
+        result = await self._client(req)
+        message = self._client._get_response_message(req, result, entity)
+        if message is not None:
+            for u in getattr(result, "updates", []) or getattr(result, "update", []):
+                if isinstance(u, types.UpdateBotInlineSend):
+                    message._inline_msg_id = u.msg_id
+                    break
+        return message
 
     async def download_media(self, *args, **kwargs):
         """

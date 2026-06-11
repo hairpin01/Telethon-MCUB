@@ -946,6 +946,18 @@ class Message(ChatGetter, SenderGetter, TLObject):
         if "invert_media" not in kwargs:
             kwargs["invert_media"] = bool(self.invert_media)  # fixed
 
+        inline_msg_id = getattr(self, "_inline_msg_id", None)
+        if inline_msg_id is not None:
+            from telethon.tl.functions.messages import EditInlineBotMessageRequest
+            return await self._client(
+                EditInlineBotMessageRequest(
+                    peer=inline_msg_id,
+                    message=kwargs.get("text") or args[0] if args else "",
+                    parse_mode=kwargs.get("parse_mode", "html"),
+                    buttons=kwargs.get("buttons"),
+                )
+            )
+
         return await self._client.edit_message(
             await self.get_input_chat(), self.id, *args, **kwargs
         )

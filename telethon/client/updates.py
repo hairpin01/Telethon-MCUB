@@ -713,6 +713,11 @@ class UpdateMethods:
             await utils.maybe_async(self.session.save())
 
     async def _dispatch_update(self: "TelegramClient", update):
+        if isinstance(update, types.UpdateBotInlineSend):
+            futures: dict = getattr(self, "_inline_send_futures", {})
+            fut = futures.pop(str(getattr(update, "id", "")), None)
+            if fut is not None and not fut.done():
+                fut.set_result(getattr(update, "msg_id", None))
         # TODO only used for AlbumHack, and MessageBox is not really designed for this
         others = None
 
@@ -908,6 +913,29 @@ class UpdateMethods:
             self._log[__name__].exception(
                 "Unhandled exception while getting update difference after reconnect"
             )
+
+    # endregion
+
+    # region Inline send helpers
+
+    async def wait_inline_send(
+        self: "TelegramClient", query_id: str, timeout: float = 5.0
+    ):
+        """Wait for UpdateBotInlineSend for *query_id* and return the inline_message_id.
+
+        Returns ``None`` if the update does not arrive within *timeout* seconds.
+        """
+        if not hasattr(self, "_inline_send_futures"):
+            self._inline_send_futures = {}
+        fut = asyncio.get_event_loop().create_future()
+        self._inline_send_futures[str(query_id)] = fut
+        try:
+            return await asyncio.wait_for(fut, timeout)
+        except (asyncio.TimeoutError, asyncio.CancelledError):
+            self._inline_send_futures.pop(str(query_id), None)
+            return None
+        except Exception:
+            return None
 
     # endregion
 
