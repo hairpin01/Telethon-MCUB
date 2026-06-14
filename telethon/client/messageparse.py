@@ -9,6 +9,30 @@ if typing.TYPE_CHECKING:
     from .telegramclient import TelegramClient
 
 
+_TG_EMOJI_RE = re.compile(
+    r'<tg-emoji\s+emoji-id=["\'](\d+)["\'][^>]*>(.*?)</tg-emoji>',
+    re.IGNORECASE | re.DOTALL,
+)
+
+# ── Auto-detect patterns ──────────────────────────────────────────
+
+# Telethon-supported HTML tags (opening tag check)
+_HTML_TAG_RE = re.compile(
+    r'<(b|strong|i|em|u|ins|s|strike|del|a|code|pre|blockquote|'
+    r'tg-spoiler|tg-emoji|emoji)[\s>]',
+    re.IGNORECASE,
+)
+
+# Telethon-default Markdown delimiters
+_MD_PATTERN_RE = re.compile(
+    r'(```[\s\S]*?```|`[^`\n]+?`|'
+    r'\*\*.+?\*\*|'
+    r'__(?!_)(.+?)__|'
+    r'~~.+?~~|'
+    r'\[.+?\]\(.+?\))'
+)
+
+
 class MessageParseMethods:
 
     # region Public properties
@@ -53,6 +77,19 @@ class MessageParseMethods:
     def parse_mode(self: "TelegramClient", mode: str):
         self._parse_mode = utils.sanitize_parse_mode(mode)
 
+    @property
+    def convert_emoji(self: "TelegramClient"):
+        """When enabled, `<tg-emoji emoji-id="...">` tags are converted to
+        `<a href="tg://emoji?id=...">` links during HTML message parsing.
+
+        This is useful for non-premium accounts that cannot send custom emoji.
+        """
+        return self._convert_emoji
+
+    @convert_emoji.setter
+    def convert_emoji(self: "TelegramClient", value: bool):
+        self._convert_emoji = bool(value)
+
     # endregion
 
     # region Private methods
@@ -70,17 +107,42 @@ class MessageParseMethods:
         except (ValueError, TypeError):
             return False
 
+    @staticmethod
+    def _convert_tg_emoji_tags(text: str) -> str:
+        """Replace <tg-emoji emoji-id="ID">content</tg-emoji> with
+        <a href="tg://emoji?id=ID">content</a> links."""
+        return _TG_EMOJI_RE.sub(
+            r'<a href="tg://emoji?id=\1">\2</a>', text)
+
+    @staticmethod
+    def _detect_parse_mode(message: str):
+        if not message:
+            return None
+        has_html = bool(_HTML_TAG_RE.search(message))
+        has_md = bool(_MD_PATTERN_RE.search(message))
+        if has_html:
+            from ..extensions import html
+            return html
+        if has_md:
+            from ..extensions import markdown
+            return markdown
+        return None
+
     async def _parse_message_text(self: "TelegramClient", message, parse_mode):
         """
         Returns a (parsed message, entities) tuple depending on ``parse_mode``.
         """
         if parse_mode == ():
-            parse_mode = self._parse_mode
+            detected = self._detect_parse_mode(message)
+            parse_mode = detected if detected else self._parse_mode
         else:
             parse_mode = utils.sanitize_parse_mode(parse_mode)
 
         if not parse_mode:
             return message, []
+
+        if self._convert_emoji and message:
+            message = self._convert_tg_emoji_tags(message)
 
         original_message = message
         message, msg_entities = parse_mode.parse(message)

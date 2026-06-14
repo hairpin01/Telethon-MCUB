@@ -8,6 +8,14 @@
 
 ## Unreleased
 
+### Feature
+
+- Added `client.convert_emoji` toggle — when enabled (`True`), `<tg-emoji emoji-id="ID">content</tg-emoji>` tags in HTML messages are automatically converted to `<a href="tg://emoji?id=ID">content</a>` links. This allows non-premium accounts to send messages with premium emoji references without triggering API errors. Manual activation only (`client.convert_emoji = True`), no automatic detection.
+
+- **Auto-detect parse_mode**: when `parse_mode` is not explicitly passed, the client now scans the message content and automatically selects HTML if it finds known HTML formatting tags (`<b>`, `<i>`, `<a>`, `<code>`, etc.) or Markdown if it finds delimiters (`**bold**`, `` `code` ``, `~~strike~~`, etc.). If both are present, HTML wins. Falls back to `client.parse_mode` when neither is detected. No breaking changes — explicit `parse_mode` still takes full precedence.
+
+- **Native message hook pipeline**: added `client.add_message_hook(hook, priority)` / `client.remove_message_hook(hook)` for registering pre-processing hooks that run **before** regular event handlers. Hooks receive the built event and return `True` to continue or `False` to stop propagation. Priority ordering (higher = sooner). This is the intended integration point for MCUB's command dispatcher and other pipeline consumers.
+
 ### Bugfix
 
 - Fixed `TypeError: Invalid message type: <class 'telethon.tl.types.MessageReplyHeader'>` in `get_message_id` when `reply_to` is a `MessageReplyHeader` object (forum topic reply). The function now extracts the topic ID (`reply_to_top_id`) or replied-to message ID (`reply_to_msg_id`) from the header.
