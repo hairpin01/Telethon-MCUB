@@ -15,7 +15,8 @@ def test_poll_basic_creation():
     poll = types.Poll(
         id=1,
         question=types.TextWithEntities(text='What is your favorite color?', entities=[]),
-        answers=[]
+        answers=[],
+        hash=0
     )
     assert poll.id == 1
     assert poll.question.text == 'What is your favorite color?'
@@ -43,7 +44,8 @@ def test_message_media_poll():
     poll = types.Poll(
         id=1,
         question=types.TextWithEntities(text='Test?', entities=[]),
-        answers=[]
+        answers=[],
+        hash=0
     )
     results = types.PollResults()
     media = types.MessageMediaPoll(poll=poll, results=results)

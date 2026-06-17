@@ -67,7 +67,20 @@ Messages
     pin_message
     unpin_message
     send_read_acknowledge
+    add_poll_answer
+    delete_poll_answer
     translate
+
+History
+-------
+
+.. py:currentmodule:: telethon.client.history.HistoryMethods
+
+.. autosummary::
+    :nosignatures:
+
+    iter_history_batches
+    export_history
 
 Uploads
 -------
@@ -124,6 +137,14 @@ Users
     get_entity
     get_input_entity
     get_peer_id
+    get_protection_policy
+    set_protection_policy
+    set_protection_mode
+    on_blocked_request
+    clear_blocked_request_handler
+    add_request_middleware
+    remove_request_middleware
+    request_middleware
 
 Chats
 -----
@@ -171,7 +192,35 @@ Updates
     list_event_handlers
     catch_up
     set_receive_updates
+    add_event_middleware
+    remove_event_middleware
     middleware
+    add_message_hook
+    remove_message_hook
+    remove_module_handlers
+    wait_inline_send
+
+Topics
+------
+
+.. py:currentmodule:: telethon.client.topics.TopicMethods
+
+.. autosummary::
+    :nosignatures:
+
+    iter_topics
+    get_topics
+    get_topic
+    create_topic
+    edit_topic
+    close_topic
+    reopen_topic
+    delete_topic_history
+    pin_topic
+    reorder_topics
+    iter_topic_messages
+    send_to_topic
+    send_file_to_topic
 
 Reactions
 ---------
@@ -234,3 +283,9 @@ Account
 
     takeout
     end_takeout
+    add_profile_music
+    remove_profile_music
+    move_profile_music
+    add_profile_album
+    get_saved_music_ids
+    iter_saved_music
