@@ -1,14 +1,20 @@
 """
 Tests for `telethon.extensions.html`.
 """
+from types import SimpleNamespace
+
 from telethon.extensions import html
+from telethon.tl import types as tl_types
 from telethon.tl.types import (
     MessageEntityBold,
     MessageEntityBlockquote,
     MessageEntityItalic,
     MessageEntityMentionName,
     MessageEntityPre,
+    MessageEntitySpoiler,
+    MessageEntityStrike,
     MessageEntityTextUrl,
+    MessageEntityUnderline,
     MessageEntityUrl,
 )
 
@@ -135,6 +141,49 @@ def test_tg_user_link_parses_as_mention_name():
     assert entities == [MessageEntityMentionName(offset=0, length=5, user_id=12345)]
 
 
+def test_parse_bot_api_alias_tags():
+    source = (
+        "<ins>u</ins>"
+        "<strike>s</strike>"
+        "<spoiler>x</spoiler>"
+        '<span class="tg-spoiler">y</span>'
+    )
+    text, entities = html.parse(source)
+
+    assert text == "usxy"
+    assert entities == [
+        MessageEntityUnderline(offset=0, length=1),
+        MessageEntityStrike(offset=1, length=1),
+        MessageEntitySpoiler(offset=2, length=1),
+        MessageEntitySpoiler(offset=3, length=1),
+    ]
+
+
+def test_parse_generic_span_is_kept_as_plain_text():
+    source = '<span class="note">hello</span>'
+    text, entities = html.parse(source)
+
+    assert text == source
+    assert entities == []
+
+
+def test_parse_line_break_and_block_tags():
+    text, entities = html.parse("a<br>b<p>c</p><div>d</div>")
+
+    assert text == "a\nb\nc\nd"
+    assert entities == []
+
+
+def test_parse_heading_tags_as_bold_blocks():
+    text, entities = html.parse("<h1>Title</h1><h2>Sub</h2>")
+
+    assert text == "Title\nSub"
+    assert entities == [
+        MessageEntityBold(offset=0, length=5),
+        MessageEntityBold(offset=6, length=3),
+    ]
+
+
 def test_nested_same_tag_keeps_full_outer_range():
     text, entities = html.parse("<strong>a<strong>b</strong>c</strong>")
     assert text == "abc"
@@ -188,3 +237,277 @@ def test_parse_non_ascii_tag_names_are_kept_as_plain_text():
     text, entities = html.parse(source)
     assert text == source
     assert entities == []
+
+
+def test_rich_message_to_html_renders_live_layer_227_sample():
+    rich_message = tl_types.RichMessage(
+        blocks=[
+            tl_types.PageBlockParagraph(
+                text=tl_types.TextConcat(
+                    texts=[
+                        tl_types.TextPlain('👤 '),
+                        tl_types.TextBold(tl_types.TextPlain('/home/esconine:')),
+                        tl_types.TextPlain(
+                            ' Вы размышляете | ✅ | (+10 IQ) Решенный пример:'
+                        ),
+                    ]
+                )
+            ),
+            tl_types.PageBlockMath('8 \\times 5 = 40'),
+        ],
+        photos=[],
+        documents=[],
+    )
+
+    assert html.rich_message_to_html(rich_message) == (
+        '👤 <b>/home/esconine:</b> Вы размышляете | ✅ | (+10 IQ) Решенный пример:\n'
+        '<pre><code class="math">8 \\times 5 = 40</code></pre>'
+    )
+
+
+def test_rich_message_text_nodes_escape_text_and_attributes():
+    rich_message = tl_types.RichMessage(
+        blocks=[
+            tl_types.PageBlockParagraph(
+                tl_types.TextConcat(
+                    texts=[
+                        tl_types.TextPlain('<plain & "quoted">'),
+                        tl_types.TextUrl(
+                            tl_types.TextPlain(' link <x>'),
+                            'https://example.com/?a=1&b=<2>',
+                            0,
+                        ),
+                        tl_types.TextEmail(tl_types.TextPlain(' mail'), 'a&b@example.com'),
+                        tl_types.TextPhone(tl_types.TextPlain(' phone'), '+1&2'),
+                        tl_types.TextMentionName(tl_types.TextPlain(' Alice'), 42),
+                        tl_types.TextImage(99, 16, 16),
+                    ]
+                )
+            )
+        ],
+        photos=[],
+        documents=[],
+    )
+
+    assert html.rich_message_to_html(rich_message) == (
+        '&lt;plain &amp; &quot;quoted&quot;&gt;'
+        '<a href="https://example.com/?a=1&amp;b=&lt;2&gt;"> link &lt;x&gt;</a>'
+        '<a href="mailto:a&amp;b@example.com"> mail</a>'
+        '<a href="tel:+1&amp;2"> phone</a>'
+        '<a href="tg://user?id=42"> Alice</a>'
+        '[img:99]'
+    )
+
+
+def test_rich_message_blocks_and_lists_render_to_html():
+    rich_message = tl_types.RichMessage(
+        blocks=[
+            tl_types.PageBlockPreformatted(tl_types.TextPlain('x < y'), 'python'),
+            tl_types.PageBlockHeader(tl_types.TextPlain('Title <&>')),
+            tl_types.PageBlockBlockquote(
+                tl_types.TextPlain('quote <b>'),
+                tl_types.TextPlain('ignored'),
+            ),
+            tl_types.PageBlockList(
+                items=[
+                    tl_types.PageListItemText(tl_types.TextPlain('one')),
+                    tl_types.PageListItemText(tl_types.TextBold(tl_types.TextPlain('two'))),
+                ]
+            ),
+            tl_types.PageBlockDivider(),
+        ],
+        photos=[],
+        documents=[],
+    )
+
+    assert html.rich_message_to_html(rich_message) == (
+        '<pre><code class="language-python">x &lt; y</code></pre>\n'
+        '<b>Title &lt;&amp;&gt;</b>\n'
+        '<blockquote>quote &lt;b&gt;</blockquote>\n'
+        '• one\n'
+        '• <b>two</b>\n\n'
+        '---'
+    )
+
+
+def test_message_to_html_prefers_rich_message_and_falls_back_to_unparse():
+    rich_message = tl_types.RichMessage(
+        blocks=[tl_types.PageBlockParagraph(tl_types.TextPlain('rich'))],
+        photos=[],
+        documents=[],
+    )
+
+    assert html.message_to_html(
+        SimpleNamespace(rich_message=rich_message, message='<plain>', entities=[])
+    ) == 'rich'
+    assert html.message_to_html(
+        SimpleNamespace(rich_message=None, message='<plain>', entities=[])
+    ) == '&lt;plain&gt;'
+
+
+def test_rich_message_unknown_future_types_are_ignored():
+    class PageBlockFuture:
+        pass
+
+    class TextFuture:
+        pass
+
+    assert html._render_text_node(TextFuture()) == ''
+    assert html.rich_message_to_html(SimpleNamespace(blocks=[PageBlockFuture()])) == ''
+
+
+def test_rich_message_renders_extra_inline_text_tags():
+    rich_message = tl_types.RichMessage(
+        blocks=[
+            tl_types.PageBlockParagraph(
+                tl_types.TextConcat(
+                    texts=[
+                        tl_types.TextAutoUrl(tl_types.TextPlain('https://example.com/?a=<b>')),
+                        tl_types.TextPlain(' '),
+                        tl_types.TextAutoEmail(tl_types.TextPlain('me&you@example.com')),
+                        tl_types.TextPlain(' '),
+                        tl_types.TextAutoPhone(tl_types.TextPlain('+1&2')),
+                        tl_types.TextPlain(' '),
+                        tl_types.TextMath('x < y'),
+                        tl_types.TextPlain(' '),
+                        tl_types.TextCustomEmoji(123, '🔥'),
+                        tl_types.TextPlain(' '),
+                        tl_types.TextHashtag(tl_types.TextPlain('#tag')),
+                        tl_types.TextPlain(' '),
+                        tl_types.TextBotCommand(tl_types.TextPlain('/start')),
+                    ]
+                )
+            )
+        ],
+        photos=[],
+        documents=[],
+    )
+
+    assert html.rich_message_to_html(rich_message) == (
+        '<a href="https://example.com/?a=&lt;b&gt;">'
+        'https://example.com/?a=&lt;b&gt;</a> '
+        '<a href="mailto:me&amp;you@example.com">me&amp;you@example.com</a> '
+        '<a href="tel:+1&amp;2">+1&amp;2</a> '
+        '<code class="math">x &lt; y</code> '
+        '<tg-emoji emoji-id="123">🔥</tg-emoji> '
+        '#tag /start'
+    )
+
+
+def test_rich_message_renders_extra_page_blocks():
+    rich_message = tl_types.RichMessage(
+        blocks=[
+            tl_types.PageBlockSubtitle(tl_types.TextPlain('Sub')),
+            tl_types.PageBlockHeading1(tl_types.TextPlain('Heading')),
+            tl_types.PageBlockFooter(tl_types.TextPlain('Foot')),
+            tl_types.PageBlockKicker(tl_types.TextPlain('Kick')),
+            tl_types.PageBlockAuthorDate(tl_types.TextPlain('Author'), None),
+            tl_types.PageBlockPullquote(tl_types.TextPlain('Pull'), tl_types.TextEmpty()),
+            tl_types.PageBlockBlockquoteBlocks(
+                blocks=[tl_types.PageBlockParagraph(tl_types.TextPlain('Nested'))],
+                caption=tl_types.TextEmpty(),
+            ),
+            tl_types.PageBlockDetails(
+                blocks=[tl_types.PageBlockParagraph(tl_types.TextPlain('Detail'))],
+                title=tl_types.TextPlain('More'),
+                open=True,
+            ),
+            tl_types.PageBlockCover(tl_types.PageBlockParagraph(tl_types.TextPlain('Cover'))),
+            tl_types.PageBlockCollage(
+                items=[tl_types.PageBlockParagraph(tl_types.TextPlain('Collage'))],
+                caption=tl_types.TextEmpty(),
+            ),
+        ],
+        photos=[],
+        documents=[],
+    )
+
+    assert html.rich_message_to_html(rich_message) == (
+        '<b>Sub</b>\n'
+        '<b>Heading</b>\n'
+        '<i>Foot</i>\n'
+        '<i>Kick</i>\n'
+        '<i>Author</i>\n'
+        '<blockquote>Pull</blockquote>\n'
+        '<blockquote>Nested</blockquote>\n'
+        '<b>More</b>\n'
+        'Detail\n'
+        'Cover\n'
+        'Collage'
+    )
+
+
+def test_rich_message_renders_deep_block_formatting():
+    caption = tl_types.PageCaption(
+        text=tl_types.TextPlain('Caption <x>'),
+        credit=tl_types.TextPlain('Credit & co'),
+    )
+    rich_message = tl_types.RichMessage(
+        blocks=[
+            tl_types.PageBlockTable(
+                title=tl_types.TextPlain('Stats'),
+                rows=[
+                    tl_types.PageTableRow(
+                        cells=[
+                            tl_types.PageTableCell(
+                                header=True,
+                                text=tl_types.TextPlain('Name'),
+                            ),
+                            tl_types.PageTableCell(
+                                header=True,
+                                text=tl_types.TextPlain('Value'),
+                            ),
+                        ]
+                    ),
+                    tl_types.PageTableRow(
+                        cells=[
+                            tl_types.PageTableCell(text=tl_types.TextPlain('IQ')),
+                            tl_types.PageTableCell(text=tl_types.TextPlain('+10')),
+                        ]
+                    ),
+                ],
+            ),
+            tl_types.PageBlockRelatedArticles(
+                title=tl_types.TextPlain('More'),
+                articles=[
+                    tl_types.PageRelatedArticle(
+                        url='https://example.com/?a=<b>',
+                        webpage_id=1,
+                        title='Article <1>',
+                        description='Desc & more',
+                    )
+                ],
+            ),
+            tl_types.PageBlockEmbed(
+                caption=caption,
+                url='https://video.example/?q=<x>',
+            ),
+            tl_types.PageBlockPhoto(photo_id=1, caption=caption),
+            tl_types.PageBlockMap(
+                geo=object(),
+                zoom=1,
+                w=10,
+                h=10,
+                caption=tl_types.PageCaption(tl_types.TextPlain('Map'), tl_types.TextEmpty()),
+            ),
+        ],
+        photos=[],
+        documents=[],
+    )
+
+    assert html.rich_message_to_html(rich_message) == (
+        '<b>Stats</b>\n'
+        '<b>Name</b> | <b>Value</b>\n'
+        'IQ | +10\n'
+        '<b>More</b>\n'
+        '• <a href="https://example.com/?a=&lt;b&gt;">Article &lt;1&gt;</a>'
+        ' — Desc &amp; more\n'
+        '<a href="https://video.example/?q=&lt;x&gt;">[embed]</a>\n'
+        'Caption &lt;x&gt;\n'
+        '<i>Credit &amp; co</i>\n'
+        '[media]\n'
+        'Caption &lt;x&gt;\n'
+        '<i>Credit &amp; co</i>\n'
+        '[map]\n'
+        'Map'
+    )

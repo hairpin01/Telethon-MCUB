@@ -968,6 +968,29 @@ class Message(ChatGetter, SenderGetter, TLObject):
             await self.get_input_chat(), self.id, *args, **kwargs
         )
 
+    async def edit_rich(self, *args, **kwargs):
+        """
+        Edits the message using Telegram rich message formatting. Shorthand
+        for `telethon.client.messages.MessageMethods.edit_rich_message`
+        with both ``entity`` and ``message`` already set.
+
+        ``events.NewMessage`` delegates to this method, so handlers can call
+        ``await event.edit_rich(...)`` directly.
+        """
+        if "reply_markup" in kwargs:
+            kwargs["buttons"] = kwargs.pop("reply_markup")
+        if "link_preview" not in kwargs:
+            kwargs["link_preview"] = bool(self.web_preview)
+        if "buttons" not in kwargs:
+            kwargs["buttons"] = self.reply_markup
+        if "invert_media" not in kwargs:
+            kwargs["invert_media"] = bool(self.invert_media)
+
+        if self._client:
+            return await self._client.edit_rich_message(
+                await self.get_input_chat(), self.id, *args, **kwargs
+            )
+
     async def delete(self, *args, **kwargs):
         """
         Deletes the message. You're responsible for checking whether you

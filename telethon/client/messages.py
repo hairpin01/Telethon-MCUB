@@ -655,6 +655,158 @@ class MessageMethods:
 
     # region Message sending/editing/deleting
 
+    @staticmethod
+    def _rich_message_unsupported(error):
+        return (
+            isinstance(error, errors.BadRequestError)
+            and "RICH_MESSAGE_UNSUPPORTED" in str(error)
+        )
+
+    @staticmethod
+    def _build_input_rich_message(
+        rich_message=None,
+        html: str = None,
+        markdown: str = None,
+        *,
+        rtl: bool = None,
+        noautolink: bool = None,
+        files=None,
+    ):
+        if rich_message is not None:
+            return rich_message
+        if html is not None:
+            return types.InputRichMessageHTML(
+                html=html,
+                rtl=rtl,
+                noautolink=noautolink,
+                files=files,
+            )
+        if markdown is not None:
+            return types.InputRichMessageMarkdown(
+                markdown=markdown,
+                rtl=rtl,
+                noautolink=noautolink,
+                files=files,
+            )
+        raise ValueError("Either html, markdown or rich_message must be provided")
+
+    @staticmethod
+    def _default_rich_fallback(html: str = None, markdown: str = None, message: str = ""):
+        if html is not None:
+            return html, "html"
+        if markdown is not None:
+            return markdown, ()
+        return message, ()
+
+    async def send_rich_message(
+        self: "TelegramClient",
+        entity: "hints.EntityLike",
+        html: str = None,
+        *,
+        rich_message: "types.TypeInputRichMessage" = None,
+        markdown: str = None,
+        message: str = "",
+        fallback: bool = True,
+        fallback_text: str = None,
+        fallback_parse_mode: typing.Optional[str] = None,
+        link_preview: bool = False,
+        reply_to: "typing.Union[int, types.Message]" = None,
+        topic: "typing.Union[int, types.TypeForumTopic]" = None,
+        buttons: typing.Optional["hints.MarkupLike"] = None,
+        silent: bool = None,
+        background: bool = None,
+        clear_draft: bool = False,
+        schedule: "hints.DateLike" = None,
+        comment_to: "typing.Union[int, types.Message]" = None,
+        send_as: typing.Optional["hints.EntityLike"] = None,
+        message_effect_id: typing.Optional[int] = None,
+        rtl: bool = None,
+        noautolink: bool = None,
+        files=None,
+    ) -> "types.Message":
+        """
+        Sends a Telegram rich message, falling back to a normal parsed message
+        if the current peer does not support rich messages.
+        """
+        input_rich_message = self._build_input_rich_message(
+            rich_message=rich_message,
+            html=html,
+            markdown=markdown,
+            rtl=rtl,
+            noautolink=noautolink,
+            files=files,
+        )
+
+        entity = await self.get_input_entity(entity)
+        if comment_to is not None:
+            entity, reply_to = await self._get_comment_data(entity, comment_to)
+        else:
+            reply_to = utils.get_message_id(reply_to)
+
+        request = functions.messages.SendMessageRequest(
+            peer=entity,
+            message=message or "",
+            no_webpage=not link_preview,
+            reply_to=build_topic_reply_to(reply_to=reply_to, topic=topic),
+            reply_markup=self.build_reply_markup(buttons),
+            clear_draft=clear_draft,
+            silent=silent,
+            background=background,
+            schedule_date=schedule,
+            send_as=await self.get_input_entity(send_as) if send_as else None,
+            effect=message_effect_id,
+            rich_message=input_rich_message,
+        )
+
+        try:
+            result = await self(request)
+        except errors.BadRequestError as error:
+            if not fallback or not self._rich_message_unsupported(error):
+                raise
+
+            if fallback_text is None:
+                fallback_text, default_parse_mode = self._default_rich_fallback(
+                    html,
+                    markdown,
+                    message,
+                )
+                if fallback_parse_mode is None:
+                    fallback_parse_mode = default_parse_mode
+
+            return await self.send_message(
+                entity,
+                fallback_text,
+                reply_to=reply_to,
+                topic=topic,
+                parse_mode=fallback_parse_mode,
+                link_preview=link_preview,
+                buttons=buttons,
+                silent=silent,
+                background=background,
+                clear_draft=clear_draft,
+                schedule=schedule,
+                send_as=send_as,
+                message_effect_id=message_effect_id,
+            )
+
+        if isinstance(result, types.UpdateShortSentMessage):
+            message = types.Message(
+                id=result.id,
+                peer_id=await self._get_peer(entity),
+                message=message or "",
+                date=result.date,
+                out=result.out,
+                media=result.media,
+                entities=result.entities,
+                reply_markup=request.reply_markup,
+                ttl_period=result.ttl_period,
+                reply_to=request.reply_to,
+            )
+            message._finish_init(self, {}, entity)
+            return message
+
+        return self._get_response_message(request, result, entity)
+
     async def _get_comment_data(
         self: "TelegramClient",
         entity: "hints.EntityLike",
@@ -1361,6 +1513,129 @@ class MessageMethods:
         )
         msg = self._get_response_message(request, await self(request), entity)
         return msg
+
+    async def edit_rich_message(
+        self: "TelegramClient",
+        entity: "typing.Union[hints.EntityLike, types.Message]",
+        message: "typing.Union[int, types.Message, types.InputMessageID, str]" = None,
+        html: str = None,
+        *,
+        rich_message: "types.TypeInputRichMessage" = None,
+        markdown: str = None,
+        text: str = "",
+        fallback: bool = True,
+        fallback_text: str = None,
+        fallback_parse_mode: typing.Optional[str] = None,
+        link_preview: bool = False,
+        buttons: typing.Optional["hints.MarkupLike"] = None,
+        schedule: "hints.DateLike" = None,
+        invert_media: bool = False,
+        rtl: bool = None,
+        noautolink: bool = None,
+        files=None,
+    ) -> "types.Message":
+        """
+        Edits a message with Telegram rich message content, falling back to a
+        normal parsed edit if the current peer does not support rich messages.
+        """
+        if isinstance(entity, (types.InputBotInlineMessageID, types.InputBotInlineMessageID64)):
+            if html is None and rich_message is None and markdown is None:
+                html = message
+            message = entity
+        elif isinstance(entity, types.Message):
+            if html is None and rich_message is None and markdown is None:
+                html = message
+            message = entity
+            entity = entity.peer_id
+
+        input_rich_message = self._build_input_rich_message(
+            rich_message=rich_message,
+            html=html,
+            markdown=markdown,
+            rtl=rtl,
+            noautolink=noautolink,
+            files=files,
+        )
+
+        if isinstance(message, (types.InputBotInlineMessageID, types.InputBotInlineMessageID64)):
+            request = functions.messages.EditInlineBotMessageRequest(
+                id=message,
+                message=text or "",
+                no_webpage=not link_preview,
+                invert_media=invert_media,
+                reply_markup=self.build_reply_markup(buttons),
+                rich_message=input_rich_message,
+            )
+            try:
+                exported = self.session.dc_id != message.dc_id
+                if exported:
+                    sender = await self._borrow_exported_sender(message.dc_id)
+                    try:
+                        return await self._call(sender, request)
+                    finally:
+                        await self._return_exported_sender(sender)
+                return await self(request)
+            except errors.BadRequestError as error:
+                if not fallback or not self._rich_message_unsupported(error):
+                    raise
+
+                if fallback_text is None:
+                    fallback_text, default_parse_mode = self._default_rich_fallback(
+                        html,
+                        markdown,
+                        text,
+                    )
+                    if fallback_parse_mode is None:
+                        fallback_parse_mode = default_parse_mode
+
+                return await self.edit_message(
+                    message,
+                    fallback_text,
+                    parse_mode=fallback_parse_mode,
+                    link_preview=link_preview,
+                    buttons=buttons,
+                    invert_media=invert_media,
+                )
+
+        entity = await self.get_input_entity(entity)
+        request = functions.messages.EditMessageRequest(
+            peer=entity,
+            id=utils.get_message_id(message),
+            message=text or "",
+            no_webpage=not link_preview,
+            reply_markup=self.build_reply_markup(buttons),
+            schedule_date=schedule,
+            invert_media=invert_media,
+            rich_message=input_rich_message,
+        )
+
+        try:
+            result = await self(request)
+        except errors.BadRequestError as error:
+            if not fallback or not self._rich_message_unsupported(error):
+                raise
+
+            if fallback_text is None:
+                fallback_text, default_parse_mode = self._default_rich_fallback(
+                    html,
+                    markdown,
+                    text,
+                )
+                if fallback_parse_mode is None:
+                    fallback_parse_mode = default_parse_mode
+
+            return await self.edit_message(
+                entity,
+                message,
+                fallback_text,
+                parse_mode=fallback_parse_mode,
+                link_preview=link_preview,
+                buttons=buttons,
+                schedule=schedule,
+                invert_media=invert_media,
+            )
+
+        return self._get_response_message(request, result, entity)
 
     async def delete_messages(
         self: "TelegramClient",

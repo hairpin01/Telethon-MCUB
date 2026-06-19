@@ -4,8 +4,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from telethon import TelegramClient
+from telethon import TelegramClient, errors
 from telethon.client import MessageMethods
+from telethon.tl import functions, types
 from telethon.tl.tlobject import DUMMY_MESSAGE_KWARGS
 from telethon.tl.types import PeerChat, PeerUser, MessageMediaDocument, Message, MessageEntityBold
 
@@ -161,6 +162,126 @@ def test_message_content_is_masked_for_restricted_peer_without_from_id():
 
     assert restricted_message.message == DUMMY_MESSAGE_KWARGS["message"]
     assert restricted_message.reply_markup is None
+
+
+class _RichMessageClient(MessageMethods):
+    def __init__(self, *, fail=False):
+        self.fail = fail
+        self.requests = []
+        self.fallback_call = None
+        self.edit_fallback_call = None
+
+    async def get_input_entity(self, entity):
+        return entity
+
+    async def __call__(self, request):
+        self.requests.append(request)
+        if self.fail:
+            raise errors.BadRequestError(request, "RICH_MESSAGE_UNSUPPORTED", 400)
+        return object()
+
+    def build_reply_markup(self, buttons):
+        return buttons
+
+    def _get_response_message(self, request, result, entity):
+        return request
+
+    async def send_message(self, *args, **kwargs):
+        self.fallback_call = args, kwargs
+        return "send fallback"
+
+    async def edit_message(self, *args, **kwargs):
+        self.edit_fallback_call = args, kwargs
+        return "edit fallback"
+
+
+@pytest.mark.asyncio
+async def test_send_rich_message_uses_input_rich_message_html():
+    client = _RichMessageClient()
+
+    request = await client.send_rich_message(
+        "peer",
+        "<b>hello</b>",
+        message="plain",
+        buttons="markup",
+    )
+
+    assert isinstance(request, functions.messages.SendMessageRequest)
+    assert request.peer == "peer"
+    assert request.message == "plain"
+    assert request.reply_markup == "markup"
+    assert isinstance(request.rich_message, types.InputRichMessageHTML)
+    assert request.rich_message.html == "<b>hello</b>"
+
+
+@pytest.mark.asyncio
+async def test_send_rich_message_falls_back_when_peer_rejects_rich_message():
+    client = _RichMessageClient(fail=True)
+
+    result = await client.send_rich_message("peer", "<b>hello</b>")
+
+    assert result == "send fallback"
+    args, kwargs = client.fallback_call
+    assert args == ("peer", "<b>hello</b>")
+    assert kwargs["parse_mode"] == "html"
+    assert kwargs["link_preview"] is False
+
+
+@pytest.mark.asyncio
+async def test_edit_rich_message_uses_edit_message_request():
+    client = _RichMessageClient()
+
+    request = await client.edit_rich_message(
+        "peer",
+        123,
+        "<b>edited</b>",
+        text="plain",
+    )
+
+    assert isinstance(request, functions.messages.EditMessageRequest)
+    assert request.peer == "peer"
+    assert request.id == 123
+    assert request.message == "plain"
+    assert isinstance(request.rich_message, types.InputRichMessageHTML)
+    assert request.rich_message.html == "<b>edited</b>"
+
+
+@pytest.mark.asyncio
+async def test_edit_rich_message_falls_back_when_peer_rejects_rich_message():
+    client = _RichMessageClient(fail=True)
+
+    result = await client.edit_rich_message("peer", 123, "<b>edited</b>")
+
+    assert result == "edit fallback"
+    args, kwargs = client.edit_fallback_call
+    assert args == ("peer", 123, "<b>edited</b>")
+    assert kwargs["parse_mode"] == "html"
+    assert kwargs["link_preview"] is False
+
+
+@pytest.mark.asyncio
+async def test_message_edit_rich_delegates_to_client_edit_rich_message():
+    message = Message(
+        id=123,
+        peer_id=PeerChat(chat_id=1),
+        date=None,
+        message="old",
+        invert_media=False,
+    )
+    client = _RichMessageClient()
+    message._client = client
+
+    async def get_input_chat():
+        return "peer"
+
+    message.get_input_chat = get_input_chat
+
+    result = await message.edit_rich("<b>edited</b>", link_preview=False)
+
+    assert isinstance(result, functions.messages.EditMessageRequest)
+    assert result.peer == "peer"
+    assert result.id == 123
+    assert result.rich_message.html == "<b>edited</b>"
 
 
 def test_message_text_uses_markdown_formatting():
