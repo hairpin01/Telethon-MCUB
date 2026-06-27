@@ -40,7 +40,7 @@ class UpdateMethods:
 
     def add_message_hook(
         self: "TelegramClient",
-        hook: Callable[[typing.Any], typing.Awaitable[bool]],
+        hook: typing.Callable[[typing.Any], typing.Awaitable[bool]],
         priority: int = 0,
     ):
         """Register a pre-processing hook for all incoming messages.
@@ -56,7 +56,7 @@ class UpdateMethods:
         self._message_hooks.append((priority, hook))
         self._message_hooks.sort(key=lambda x: x[0], reverse=True)
 
-    def remove_message_hook(self: "TelegramClient", hook: Callable):
+    def remove_message_hook(self: "TelegramClient", hook: typing.Callable):
         """Remove a previously registered message hook."""
         self._message_hooks[:] = [(p, h) for p, h in self._message_hooks if h is not hook]
 
