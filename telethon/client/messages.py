@@ -807,6 +807,58 @@ class MessageMethods:
 
         return self._get_response_message(request, result, entity)
 
+    async def send_draft_message(
+        self: "TelegramClient",
+        entity: "hints.EntityLike",
+        html: str = None,
+        *,
+        rich_message: "types.TypeInputRichMessage" = None,
+        markdown: str = None,
+        draft_id: int = None,
+        random_id: int = None,
+        topic: "typing.Union[int, types.TypeForumTopic]" = None,
+        rtl: bool = None,
+        noautolink: bool = None,
+        files=None,
+    ) -> bool:
+        """
+        Streams a temporary rich message draft preview to a chat.
+
+        This wraps Telegram's rich-message draft action
+        (:tl:`InputSendMessageRichMessageDraftAction`) and sends it through
+        :tl:`messages.setTyping`. Draft previews are ephemeral; use
+        :meth:`send_rich_message` with the final content to persist the result.
+
+        Use the same ``draft_id`` (or ``random_id`` alias) to update the same
+        draft stream. If omitted, Telegram-MCUB will let the TL action generate
+        a random identifier.
+        """
+        if draft_id is not None and random_id is not None and draft_id != random_id:
+            raise ValueError("draft_id and random_id must match when both are provided")
+
+        input_rich_message = self._build_input_rich_message(
+            rich_message=rich_message,
+            html=html,
+            markdown=markdown,
+            rtl=rtl,
+            noautolink=noautolink,
+            files=files,
+        )
+        action = types.InputSendMessageRichMessageDraftAction(
+            rich_message=input_rich_message,
+            random_id=draft_id if draft_id is not None else random_id,
+        )
+
+        return await self(
+            functions.messages.SetTypingRequest(
+                peer=await self.get_input_entity(entity),
+                action=action,
+                top_msg_id=None if topic is None else get_topic_top_message(topic),
+            )
+        )
+
+    send_rich_message_draft = send_draft_message
+
     async def _get_comment_data(
         self: "TelegramClient",
         entity: "hints.EntityLike",
@@ -1160,6 +1212,35 @@ class MessageMethods:
             return message
 
         return self._get_response_message(request, result, entity)
+
+    async def safe_send_message(
+        self: "TelegramClient",
+        entity: "hints.EntityLike",
+        message="",
+        *,
+        default=None,
+        **kwargs,
+    ):
+        """Like `send_message`, but returns ``default`` on common no-op errors."""
+
+        try:
+            return await self.send_message(entity, message, **kwargs)
+        except errors.MessageNotModifiedError:
+            return default
+
+    async def send_album(
+        self: "TelegramClient",
+        entity: "hints.EntityLike",
+        files,
+        *,
+        captions=None,
+        **kwargs,
+    ):
+        """Convenience wrapper around `send_file` for media albums."""
+
+        if captions is not None and "caption" not in kwargs:
+            kwargs["caption"] = captions
+        return await self.send_file(entity, files, **kwargs)
 
     async def forward_messages(
         self: "TelegramClient",

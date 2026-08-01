@@ -142,6 +142,133 @@ class InlineQuery(EventBuilder):
             """
             return custom.InlineBuilder(self._client)
 
+        def paginate(self, results, limit=50, offset=None):
+            """
+            Slices inline query results using Telegram's offset convention.
+
+            Returns ``(page, next_offset)``. ``offset`` defaults to
+            `event.offset`, so this can be used directly inside inline query
+            handlers before calling `answer`.
+            """
+
+            if results is None:
+                results = []
+            elif not isinstance(results, (list, tuple)):
+                results = [results]
+
+            try:
+                start = int(self.offset if offset is None else offset or 0)
+            except (TypeError, ValueError):
+                start = 0
+
+            try:
+                limit = int(limit)
+            except (TypeError, ValueError):
+                limit = 50
+
+            start = max(start, 0)
+            limit = max(1, min(limit, 50))
+            end = start + limit
+            next_offset = str(end) if end < len(results) else ""
+            return list(results[start:end]), next_offset
+
+        async def answer_page(
+            self,
+            results,
+            cache_time=0,
+            *,
+            limit=50,
+            offset=None,
+            gallery=False,
+            next_offset=None,
+            private=False,
+            switch_pm=None,
+            switch_pm_param="",
+        ):
+            """
+            Paginates and answers an inline query in one call.
+
+            This is a convenience wrapper over `paginate` and `answer` for the
+            common case where a handler has more than 50 possible results.
+            """
+
+            page, page_next_offset = self.paginate(results, limit=limit, offset=offset)
+            if next_offset is None:
+                next_offset = page_next_offset
+            return await self.answer(
+                page,
+                cache_time=cache_time,
+                gallery=gallery,
+                next_offset=next_offset,
+                private=private,
+                switch_pm=switch_pm,
+                switch_pm_param=switch_pm_param,
+            )
+
+        async def answer_article(
+            self,
+            title,
+            text=None,
+            cache_time=0,
+            *,
+            gallery=False,
+            next_offset=None,
+            private=False,
+            switch_pm=None,
+            switch_pm_param="",
+            **kwargs,
+        ):
+            """
+            Answers the inline query with a single article result.
+
+            ``kwargs`` are forwarded to `InlineBuilder.article`, so rich
+            articles can use ``rich_text`` or ``rich_message`` here too.
+            """
+
+            if text is not None:
+                kwargs.setdefault("text", text)
+
+            return await self.answer(
+                [self.builder.article(title, **kwargs)],
+                cache_time=cache_time,
+                gallery=gallery,
+                next_offset=next_offset,
+                private=private,
+                switch_pm=switch_pm,
+                switch_pm_param=switch_pm_param,
+            )
+
+        async def answer_text(self, title, text, **kwargs):
+            """Alias for `answer_article` with plain text content."""
+
+            return await self.answer_article(title, text=text, **kwargs)
+
+        async def answer_rich(self, title, rich_text=None, **kwargs):
+            """Alias for `answer_article` with rich text content."""
+
+            return await self.answer_article(title, rich_text=rich_text, **kwargs)
+
+        async def answer_media(self, title, file, *, media_type="document", **kwargs):
+            """Answers with a single media inline result.
+
+            ``media_type`` may be ``'photo'`` or ``'document'``.
+            Extra keyword arguments are forwarded to the corresponding
+            `InlineBuilder` method and `answer`.
+            """
+
+            answer_keys = {
+                "cache_time",
+                "gallery",
+                "next_offset",
+                "private",
+                "switch_pm",
+                "switch_pm_param",
+            }
+            answer_kwargs = {key: kwargs.pop(key) for key in list(kwargs) if key in answer_keys}
+            builder = self.builder.photo if media_type == "photo" else self.builder.document
+            result = builder(file, title=title, **kwargs)
+            return await self.answer([result], **answer_kwargs)
+
         async def answer(
             self,
             results=None,

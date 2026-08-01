@@ -1,11 +1,11 @@
-from typing import Optional, List, TYPE_CHECKING
+from typing import Optional, List
 from datetime import datetime
 from .chatgetter import ChatGetter
 from .sendergetter import SenderGetter
 from .messagebutton import MessageButton
 from .forward import Forward
 from .file import File
-from .. import TLObject, types, functions, alltlobjects
+from .. import TLObject, types, functions
 from ... import utils, errors
 from ...extensions import html, markdown
 from ...tl.tlobject import RESTRICT_IDS, DUMMY_MESSAGE_KWARGS
@@ -420,7 +420,10 @@ class Message(ChatGetter, SenderGetter, TLObject):
         :tl:`MessageService`.
         """
         if self._text is None:
-            self._text = markdown.unparse(self.message, self.entities)
+            if self.message or self.entities:
+                self._text = markdown.unparse(self.message, self.entities)
+            else:
+                self._text = self._rich_plain_text()
 
         return self._text
 
@@ -437,7 +440,7 @@ class Message(ChatGetter, SenderGetter, TLObject):
         :tl:`MessageService`.
         """
         if self._html_text is None:
-            self._html_text = html.unparse(self.message, self.entities)
+            self._html_text = html.message_to_html(self)
 
         return self._html_text
 
@@ -456,7 +459,18 @@ class Message(ChatGetter, SenderGetter, TLObject):
         Setting a value to this field will erase the
         `entities`, unlike changing the `message` member.
         """
-        return self.message
+        if self.message:
+            return self.message
+        return self._rich_plain_text()
+
+    def _rich_plain_text(self):
+        rich_html = html.message_to_html(self)
+        if not rich_html:
+            return self.message
+        try:
+            return html.parse(rich_html)[0]
+        except Exception:
+            return rich_html
 
     @raw_text.setter
     def raw_text(self, value):
@@ -990,6 +1004,31 @@ class Message(ChatGetter, SenderGetter, TLObject):
             return await self._client.edit_rich_message(
                 await self.get_input_chat(), self.id, *args, **kwargs
             )
+
+    async def safe_edit(self, *args, default=None, **kwargs):
+        """Like `edit`, but ignores ``MessageNotModifiedError``."""
+
+        try:
+            return await self.edit(*args, **kwargs)
+        except errors.MessageNotModifiedError:
+            return default if default is not None else self
+
+    async def react(self, reaction="👍", *, big=False, add_to_recent=True):
+        """Shortcut for `client.send_reaction` on this message."""
+
+        if self._client:
+            return await self._client.send_reaction(
+                await self.get_input_chat(),
+                self.id,
+                reaction=reaction,
+                big=big,
+                add_to_recent=add_to_recent,
+            )
+
+    async def unreact(self):
+        """Removes reactions from this message for the current account."""
+
+        return await self.react([])
 
     async def delete(self, *args, **kwargs):
         """

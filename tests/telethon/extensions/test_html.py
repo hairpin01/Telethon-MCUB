@@ -505,9 +505,88 @@ def test_rich_message_renders_deep_block_formatting():
         '<a href="https://video.example/?q=&lt;x&gt;">[embed]</a>\n'
         'Caption &lt;x&gt;\n'
         '<i>Credit &amp; co</i>\n'
-        '[media]\n'
+        '<a href="tg://photo?id=1">[photo]</a>\n'
         'Caption &lt;x&gt;\n'
         '<i>Credit &amp; co</i>\n'
         '[map]\n'
         'Map'
+    )
+
+
+def test_rich_message_renders_media_links_and_new_block_flags():
+    # Received RichMessage blocks carry Telegram's page-block media ids. When
+    # sending InputRichMessageHTML, the id in tg://photo?id=... must instead
+    # match the string id from InputRichFilePhoto/InputRichFileDocument.
+    rich_message = tl_types.RichMessage(
+        blocks=[
+            tl_types.PageBlockPhoto(
+                photo_id=10,
+                caption=tl_types.PageCaption(tl_types.TextPlain('Photo'), tl_types.TextEmpty()),
+                spoiler=True,
+            ),
+            tl_types.PageBlockVideo(
+                video_id=11,
+                caption=tl_types.PageCaption(tl_types.TextPlain('Video'), tl_types.TextEmpty()),
+            ),
+            tl_types.PageBlockAudio(
+                audio_id=12,
+                caption=tl_types.PageCaption(tl_types.TextPlain('Audio'), tl_types.TextEmpty()),
+            ),
+            tl_types.InputPageBlockMap(
+                geo=object(),
+                zoom=1,
+                w=10,
+                h=10,
+                caption=tl_types.PageCaption(tl_types.TextPlain('Input map'), tl_types.TextEmpty()),
+            ),
+            tl_types.PageBlockUnsupported(),
+        ],
+        photos=[],
+        documents=[],
+    )
+
+    assert html.rich_message_to_html(rich_message) == (
+        '<tg-spoiler><a href="tg://photo?id=10">[photo]</a></tg-spoiler>\n'
+        'Photo\n'
+        '<a href="tg://video?id=11">[video]</a>\n'
+        'Video\n'
+        '<a href="tg://audio?id=12">[audio]</a>\n'
+        'Audio\n'
+        '[map]\n'
+        'Input map\n'
+        '[unsupported]'
+    )
+
+
+def test_rich_message_renders_checkbox_list_items():
+    rich_message = tl_types.RichMessage(
+        blocks=[
+            tl_types.PageBlockList(
+                items=[
+                    tl_types.PageListItemText(
+                        tl_types.TextPlain('done'), checkbox=True, checked=True
+                    ),
+                    tl_types.PageListItemBlocks(
+                        [tl_types.PageBlockParagraph(tl_types.TextPlain('todo'))],
+                        checkbox=True,
+                        checked=False,
+                    ),
+                ]
+            ),
+            tl_types.PageBlockOrderedList(
+                items=[
+                    tl_types.PageListOrderedItemText(
+                        tl_types.TextPlain('ordered'), checkbox=True, checked=True, num='A'
+                    )
+                ]
+            ),
+        ],
+        photos=[],
+        documents=[],
+    )
+
+    assert html.rich_message_to_html(rich_message) == (
+        '• [x] done\n'
+        '• [ ] todo\n'
+        'A. [x] ordered'
     )

@@ -325,6 +325,26 @@ class CallbackQuery(EventBuilder):
                     await self.get_input_chat(), self.query.msg_id, *args, **kwargs
                 )
 
+        async def edit_rich(self, html=None, **kwargs):
+            """
+            Edits the callback message using Telegram rich message formatting.
+
+            For inline callbacks this uses the real inline ``query.msg_id``
+            (:tl:`InputBotInlineMessageID` / :tl:`InputBotInlineMessageID64`),
+            not Telethon's derived pseudo chat/message identifiers.
+            """
+            self._client.loop.create_task(self.answer())
+            kwargs.setdefault("fallback", False)
+            if isinstance(
+                self.query.msg_id, (types.InputBotInlineMessageID, types.InputBotInlineMessageID64)
+            ):
+                return await self._client.edit_rich_message(
+                    self.query.msg_id, html, **kwargs
+                )
+            return await self._client.edit_rich_message(
+                await self.get_input_chat(), self.query.msg_id, html, **kwargs
+            )
+
         async def delete(self, *args, **kwargs):
             """
             Deletes the message. Shorthand for

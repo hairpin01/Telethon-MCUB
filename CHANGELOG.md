@@ -1,12 +1,18 @@
 # Telethon-MCUB Changelog
 
-## v1.43.18 (2026-06-08)
+## v1.44.2 (2026-07-31)
 
-### Bugfix
+- **Inline rich articles**: `InlineBuilder.article(...)` now supports `rich_text`, `rich_parse_mode`, `rich_message`, `rich_rtl`, `rich_noautolink`, and `rich_files`, producing `InputBotInlineMessageRichMessage` results for inline mode. Added `InlineBuilder.rich_article(...)` as a shorter wrapper.
 
-- Fixed `UnboundLocalError: cannot access local variable 'warnings'` in `TelegramBaseClient.__init__` when a proxy is configured and `python-socks` is not installed. The redundant local `import warnings` inside an `if isinstance(session, ...)` block shadowed the module-level import, causing Python to treat `warnings` as a local variable for the entire method. Removed the local import — the module-level import is sufficient. (MCUB userbot report)
+- **Inline query convenience helpers**: added `InlineQuery.Event.answer_article(...)` for one-result answers and `paginate(...)` / `answer_page(...)` for offset-based inline pagination without manual slicing.
 
-## Unreleased
+- **Rich HTML block rendering**: extended `rich_message_to_html(...)` with media links (`tg://photo?id=...`, `tg://video?id=...`, `tg://audio?id=...`), spoiler media labels, `InputPageBlockMap`, `PageBlockUnsupported`, and checkbox list items.
+
+- **Helper API pack**: added chainable `custom.RichText`/`custom.RichBuilder`, `rich_media` support for inline rich articles, inline aliases (`answer_text`, `answer_rich`, `answer_media`), message shortcuts (`safe_edit`, `react`, `unreact`), client shortcuts (`safe_send_message`, `send_album`), and topic shortcuts (`send_to_topic`, `reply_topic`).
+
+- **Rich message text fallback**: `Message.text`, `Message.raw_text`, and `Message.html_text` now return rendered rich-message content when Telegram sends a `rich_message` with an empty regular `message` field.
+
+## v1.44.1 (2026-06-08)
 
 ### Feature
 
@@ -16,7 +22,13 @@
 
 - **Native message hook pipeline**: added `client.add_message_hook(hook, priority)` / `client.remove_message_hook(hook)` for registering pre-processing hooks that run **before** regular event handlers. Hooks receive the built event and return `True` to continue or `False` to stop propagation. Priority ordering (higher = sooner). This is the intended integration point for MCUB's command dispatcher and other pipeline consumers.
 
+- **Updated TL layer for rich messages**: refreshed generated TL objects to include Telegram rich message constructors and request fields such as `InputRichMessageHTML`, `InputRichMessageMarkdown`, `InputBotInlineMessageRichMessage`, `Message.rich_message`, and `messages.SendMessage`/`EditMessage` rich message support.
+
+- **Rich message helpers**: added high-level `client.send_rich_message(...)`, `client.edit_rich_message(...)`, and `Message.edit_rich(...)` helpers for HTML/Markdown rich messages with fallback to regular text edits when Telegram rejects `rich_message` for a peer.
+
 ### Bugfix
+
+- Fixed `UnboundLocalError: cannot access local variable 'warnings'` in `TelegramBaseClient.__init__` when a proxy is configured and `python-socks` is not installed. The redundant local `import warnings` inside an `if isinstance(session, ...)` block shadowed the module-level import, causing Python to treat `warnings` as a local variable for the entire method. Removed the local import — the module-level import is sufficient. (MCUB userbot report)
 
 - Fixed `TypeError: Invalid message type: <class 'telethon.tl.types.MessageReplyHeader'>` in `get_message_id` when `reply_to` is a `MessageReplyHeader` object (forum topic reply). The function now extracts the topic ID (`reply_to_top_id`) or replied-to message ID (`reply_to_msg_id`) from the header.
 

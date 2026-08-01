@@ -1,4 +1,5 @@
 import hashlib
+import re
 
 from .. import functions, types
 from ... import utils
@@ -16,6 +17,8 @@ _TYPE_TO_MIMES = {
     "video": ["video/mp4"],  # tdlib includes text/html for some reason
     "voice": ["audio/ogg"],
 }
+
+_RICH_MEDIA_REF_RE = re.compile(r'tg://(photo|document|video|audio|media)\?id=([^"\'<>\s&]+)')
 
 
 class InlineBuilder:
@@ -66,6 +69,7 @@ class InlineBuilder:
                 too. If you send two articles with the same ID, it will raise
                 ``ResultIdDuplicateError``. Consider giving them an explicit
                 ID if you need to send two results that are the same.
+
     """
 
     def __init__(self, client):
@@ -83,6 +87,13 @@ class InlineBuilder:
         id=None,
         text=None,
         parse_mode=(),
+        rich_text=None,
+        rich_parse_mode="html",
+        rich_message=None,
+        rich_rtl=None,
+        rich_noautolink=None,
+        rich_files=None,
+        rich_media=None,
         link_preview=True,
         geo=None,
         period=60,
@@ -111,6 +122,40 @@ class InlineBuilder:
                 The content to be shown for this result.
                 For now it has to be a :tl:`InputWebDocument` if present.
 
+            rich_text (`str`, optional):
+                HTML or Markdown source for a rich article message. Use this
+                when the selected inline result should send an expanded rich
+                message instead of a normal formatted text message.
+
+            rich_parse_mode (`str`, optional):
+                The format used by ``rich_text``. May be ``'html'`` (default),
+                ``'markdown'`` or ``'md'``.
+
+            rich_message (:tl:`InputRichMessage`, optional):
+                Already-built rich message to send. Useful when you need full
+                control over rich blocks and attached rich files.
+
+            rich_rtl (`bool`, optional):
+                Whether Telegram should render the rich message right-to-left.
+
+            rich_noautolink (`bool`, optional):
+                Whether Telegram should avoid automatic link detection in the
+                rich message.
+
+            rich_files (`list`, optional):
+                Optional :tl:`InputRichFile` items referenced by ``rich_text``.
+                The ``id`` in links such as ``tg://photo?id=hero`` must match
+                the string ``id`` of a corresponding
+                :tl:`InputRichFilePhoto` or :tl:`InputRichFileDocument` item;
+                it is not a list index.
+
+            rich_media (`dict` | `list`, optional):
+                Convenience mapping/list converted into ``rich_files``. Keys
+                are ids used by links such as ``tg://media?id=hero``. HTTP(S)
+                URLs are uploaded via Telegram and ``tg://media`` is rewritten
+                to ``tg://photo``, ``tg://video``, ``tg://audio`` or
+                ``tg://document`` based on the media type.
+
         Example:
             .. code-block:: python
 
@@ -134,17 +179,40 @@ class InlineBuilder:
                         text='Text sent with buttons below',
                         buttons=Button.url('https://example.com'),
                     ),
+                    # Sending an HTML rich message.
+                    builder.article(
+                        title='Rich option',
+                        rich_text='<h1>Title</h1><p><b>Rich</b> body</p>',
+                    ),
+                    # Rich message with an attached rich file.
+                    builder.rich_article(
+                        title='Rich photo',
+                        rich_text='<a href="tg://photo?id=hero">Photo</a>',
+                        rich_files=[types.InputRichFilePhoto('hero', input_photo)],
+                    ),
                 ]
         """
         # TODO Does 'article' work always?
         # article, photo, gif, mpeg4_gif, video, audio,
         # voice, document, location, venue, contact, game
+        rich_text, rich_files = await self._normalize_rich_media_for_message(
+            rich_media=rich_media,
+            rich_files=rich_files,
+            rich_text=rich_text,
+        )
+
         result = types.InputBotInlineResult(
             id=id or "",
             type="article",
             send_message=await self._message(
                 text=text,
                 parse_mode=parse_mode,
+                rich_text=rich_text,
+                rich_parse_mode=rich_parse_mode,
+                rich_message=rich_message,
+                rich_rtl=rich_rtl,
+                rich_noautolink=rich_noautolink,
+                rich_files=rich_files,
                 link_preview=link_preview,
                 geo=geo,
                 period=period,
@@ -162,6 +230,168 @@ class InlineBuilder:
             result.id = hashlib.sha256(bytes(result)).hexdigest()
 
         return result
+
+    async def rich_article(
+        self,
+        title,
+        rich_text=None,
+        *,
+        rich_parse_mode="html",
+        rich_message=None,
+        description=None,
+        url=None,
+        thumb=None,
+        content=None,
+        id=None,
+        buttons=None,
+        rich_rtl=None,
+        rich_noautolink=None,
+        rich_files=None,
+        rich_media=None,
+    ):
+        """
+        Creates an article result that sends a Telegram rich message.
+
+        This is a convenience wrapper over `article` for inline results backed
+        by :tl:`InputBotInlineMessageRichMessage`.
+        """
+
+        return await self.article(
+            title,
+            description=description,
+            url=url,
+            thumb=thumb,
+            content=content,
+            id=id,
+            rich_text=rich_text,
+            rich_parse_mode=rich_parse_mode,
+            rich_message=rich_message,
+            rich_rtl=rich_rtl,
+            rich_noautolink=rich_noautolink,
+            rich_files=rich_files,
+            rich_media=rich_media,
+            buttons=buttons,
+        )
+
+    async def _normalize_rich_media_for_message(self, rich_media=None, rich_files=None, rich_text=None):
+        result = []
+        refs = self._extract_rich_media_refs(rich_text)
+        if rich_files:
+            result.extend(rich_files if isinstance(rich_files, (list, tuple)) else [rich_files])
+        if rich_media:
+            for spec in self._iter_rich_media_specs(rich_media):
+                media_id = str(spec.get("id"))
+                rich_file, resolved_type = await self._make_input_rich_file(
+                    spec, refs.get(media_id)
+                )
+                result.append(rich_file)
+                if refs.get(media_id) == "media":
+                    rich_text = self._replace_media_ref_type(rich_text, media_id, resolved_type)
+        return rich_text, result or None
+
+    @staticmethod
+    def _extract_rich_media_refs(rich_text):
+        if not rich_text:
+            return {}
+        refs = {}
+        for media_type, media_id in _RICH_MEDIA_REF_RE.findall(rich_text):
+            refs.setdefault(media_id, media_type)
+        return refs
+
+    @staticmethod
+    def _replace_media_ref_type(rich_text, media_id, media_type):
+        if not rich_text or media_type == "media":
+            return rich_text
+        return re.sub(
+            rf"tg://media\?id={re.escape(media_id)}(?=\b|[\"'<>\s&])",
+            f"tg://{media_type}?id={media_id}",
+            rich_text,
+        )
+
+    @staticmethod
+    def _iter_rich_media_specs(rich_media):
+        if isinstance(rich_media, dict):
+            if "id" in rich_media:
+                yield rich_media
+            else:
+                for media_id, media in rich_media.items():
+                    yield {"id": media_id, "media": media}
+            return
+        if isinstance(rich_media, (list, tuple)) and not isinstance(rich_media, (str, bytes, bytearray)):
+            for item in rich_media:
+                if isinstance(item, dict):
+                    yield item
+                elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                    yield {"id": item[0], "media": item[1]}
+                else:
+                    raise TypeError("rich_media items must be dicts or (id, media) pairs")
+            return
+        raise TypeError("rich_media must be a mapping, a spec dict, or a list of specs")
+
+    @staticmethod
+    def _infer_url_rich_media_type(url, media_type=None):
+        if media_type and media_type != "media":
+            return "document" if media_type in {"doc", "file"} else media_type
+        clean = str(url).split("?", 1)[0].split("#", 1)[0].lower()
+        if clean.endswith((".jpg", ".jpeg", ".png", ".webp", ".gif")):
+            return "photo"
+        if clean.endswith((".mp4", ".mov", ".m4v", ".webm", ".mkv")):
+            return "video"
+        if clean.endswith((".mp3", ".ogg", ".oga", ".m4a", ".wav", ".flac")):
+            return "audio"
+        return "document"
+
+    async def _make_input_rich_file(self, spec, referenced_type=None):
+        media_id = str(spec.get("id") or "")
+        if not media_id:
+            raise ValueError("rich_media spec requires a non-empty 'id'")
+        media = spec.get("media", spec.get("file"))
+        media_type = spec.get("type") or referenced_type
+        if spec.get("photo") is not None:
+            media = spec["photo"]
+            media_type = media_type or "photo"
+        if spec.get("document") is not None:
+            media = spec["document"]
+            media_type = media_type or "document"
+        if media is None:
+            raise ValueError("rich_media spec requires 'media', 'photo' or 'document'")
+
+        if isinstance(media, str) and re.match(r"https?://", media):
+            resolved_type = self._infer_url_rich_media_type(media, media_type)
+            rich_file = await self._upload_url_as_rich_file(media_id, media, resolved_type)
+            return rich_file, resolved_type
+
+        if media_type in {None, "photo"}:
+            try:
+                return types.InputRichFilePhoto(media_id, utils.get_input_photo(media)), "photo"
+            except TypeError as e:
+                if media_type == "photo":
+                    raise ValueError(
+                        f"rich_media id {media_id!r} is referenced as photo but the value is not a photo"
+                    ) from e
+        if media_type in {None, "document", "doc", "file", "audio", "video"}:
+            try:
+                resolved = media_type if media_type in {"audio", "video"} else "document"
+                return types.InputRichFileDocument(media_id, utils.get_input_document(media)), resolved
+            except TypeError as e:
+                if media_type is not None:
+                    raise ValueError(
+                        f"rich_media id {media_id!r} is referenced as {media_type} but the value is not a document"
+                    ) from e
+        raise TypeError("rich_media value must be a Telegram photo/document/media object or an HTTP(S) URL")
+
+    async def _upload_url_as_rich_file(self, media_id, url, media_type):
+        _file_handle, media, _as_image = await self._client._file_to_media(
+            url,
+            force_document=media_type != "photo",
+            supports_streaming=media_type == "video",
+        )
+        uploaded = await self._client(
+            functions.messages.UploadMediaRequest(types.InputPeerSelf(), media)
+        )
+        if media_type == "photo":
+            return types.InputRichFilePhoto(media_id, utils.get_input_photo(uploaded.photo))
+        return types.InputRichFileDocument(media_id, utils.get_input_document(uploaded.document))
 
     # noinspection PyIncorrectDocstring
     async def photo(
@@ -434,6 +664,12 @@ class InlineBuilder:
         *,
         text=None,
         parse_mode=(),
+        rich_text=None,
+        rich_parse_mode="html",
+        rich_message=None,
+        rich_rtl=None,
+        rich_noautolink=None,
+        rich_files=None,
         link_preview=True,
         media=False,
         geo=None,
@@ -443,17 +679,40 @@ class InlineBuilder:
         buttons=None,
     ):
         # Empty strings are valid but false-y; if they're empty use dummy '\0'
-        args = ("\0" if text == "" else text, geo, contact, game)
+        rich = rich_message if rich_message is not None else rich_text
+        args = (
+            "\0" if text == "" else text,
+            geo,
+            contact,
+            game,
+            "\0" if rich == "" else rich,
+        )
         if sum(1 for x in args if x is not None and x is not False) != 1:
             raise ValueError(
-                "Must set exactly one of text, geo, contact or game (set {})".format(
-                    ", ".join(x[0] for x in zip("text geo contact game".split(), args) if x[1])
+                "Must set exactly one of text, geo, contact, game or rich_text (set {})".format(
+                    ", ".join(
+                        x[0]
+                        for x in zip("text geo contact game rich_text".split(), args)
+                        if x[1]
+                    )
                     or "none"
                 )
             )
 
         markup = self._client.build_reply_markup(buttons)
-        if text is not None:
+        if rich is not None:
+            return types.InputBotInlineMessageRichMessage(
+                rich_message=self._rich_message(
+                    rich_text=rich_text,
+                    rich_parse_mode=rich_parse_mode,
+                    rich_message=rich_message,
+                    rich_rtl=rich_rtl,
+                    rich_noautolink=rich_noautolink,
+                    rich_files=rich_files,
+                ),
+                reply_markup=markup,
+            )
+        elif text is not None:
             text, msg_entities = await self._client._parse_message_text(text, parse_mode)
             if media:
                 # "MediaAuto" means it will use whatever media the inline
@@ -499,4 +758,40 @@ class InlineBuilder:
         elif game:
             return types.InputBotInlineMessageGame(reply_markup=markup)
         else:
-            raise ValueError("No text, game or valid geo or contact given")
+            raise ValueError("No text, rich_text, game or valid geo or contact given")
+
+    @staticmethod
+    def _rich_message(
+        *,
+        rich_text=None,
+        rich_parse_mode="html",
+        rich_message=None,
+        rich_rtl=None,
+        rich_noautolink=None,
+        rich_files=None,
+    ):
+        if rich_message is not None:
+            if rich_text is not None:
+                raise ValueError("Cannot set both rich_text and rich_message")
+            return rich_message
+
+        if rich_text is None:
+            raise ValueError("No rich_text or rich_message given")
+
+        mode = rich_parse_mode.lower() if isinstance(rich_parse_mode, str) else rich_parse_mode
+        if mode in ("html", "htm"):
+            return types.InputRichMessageHTML(
+                rich_text,
+                rtl=rich_rtl,
+                noautolink=rich_noautolink,
+                files=rich_files,
+            )
+        elif mode in ("markdown", "md"):
+            return types.InputRichMessageMarkdown(
+                rich_text,
+                rtl=rich_rtl,
+                noautolink=rich_noautolink,
+                files=rich_files,
+            )
+
+        raise ValueError("rich_parse_mode must be 'html', 'markdown' or 'md'")

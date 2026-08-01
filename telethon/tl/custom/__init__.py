@@ -7,6 +7,7 @@ from .forward import Forward
 from .message import Message
 from .button import Button
 from .inlinebuilder import InlineBuilder
+from .richbuilder import RichBuilder, RichText
 from .inlineresult import InlineResult
 from .inlineresults import InlineResults
 from .conversation import Conversation

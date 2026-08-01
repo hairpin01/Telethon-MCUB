@@ -228,6 +228,40 @@ async def test_send_rich_message_falls_back_when_peer_rejects_rich_message():
 
 
 @pytest.mark.asyncio
+async def test_send_draft_message_uses_rich_message_draft_action():
+    client = _RichMessageClient()
+
+    result = await client.send_draft_message(
+        "peer",
+        "<tg-thinking>Thinking...</tg-thinking>",
+        draft_id=42,
+        topic=777,
+        noautolink=True,
+    )
+
+    assert result is not None
+    request = client.requests[0]
+    assert isinstance(request, functions.messages.SetTypingRequest)
+    assert request.peer == "peer"
+    assert request.top_msg_id == 777
+    assert isinstance(request.action, types.InputSendMessageRichMessageDraftAction)
+    assert request.action.random_id == 42
+    assert isinstance(request.action.rich_message, types.InputRichMessageHTML)
+    assert request.action.rich_message.html == "<tg-thinking>Thinking...</tg-thinking>"
+    assert request.action.rich_message.noautolink is True
+
+
+@pytest.mark.asyncio
+async def test_send_draft_message_rejects_conflicting_draft_ids():
+    client = _RichMessageClient()
+
+    with pytest.raises(ValueError, match="draft_id and random_id"):
+        await client.send_draft_message("peer", "<p>x</p>", draft_id=1, random_id=2)
+
+    assert client.requests == []
+
+
+@pytest.mark.asyncio
 async def test_edit_rich_message_uses_edit_message_request():
     client = _RichMessageClient()
 

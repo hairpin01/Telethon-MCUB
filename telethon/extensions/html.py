@@ -2,7 +2,6 @@
 Simple HTML -> Telegram entity parser.
 """
 
-import functools
 import re
 from collections import deque
 from html import escape
@@ -554,6 +553,25 @@ def _render_labeled_block(label: str, caption: object = None) -> str:
     return rendered + "\n"
 
 
+def _render_media_block(block: object, label: str, id_attr: str = None, scheme: str = None) -> str:
+    rendered_label = label
+    url = getattr(block, "url", None)
+    if not url and id_attr and scheme:
+        media_id = getattr(block, id_attr, None)
+        if media_id is not None:
+            url = "tg://{}?id={}".format(scheme, media_id)
+
+    if url:
+        rendered_label = _render_block_link(label, url)
+    else:
+        rendered_label = _escape_html(label)
+
+    if getattr(block, "spoiler", False):
+        rendered_label = "<tg-spoiler>{}</tg-spoiler>".format(rendered_label)
+
+    return _render_labeled_block(rendered_label, getattr(block, "caption", None))
+
+
 def _render_block_link(label: str, url: object) -> str:
     if not url:
         return _escape_html(label)
@@ -616,22 +634,27 @@ def _render_list_item(item: object) -> str:
         return ""
 
     try:
+        prefix = ""
+        if getattr(item, "checkbox", False):
+            prefix = "[x] " if getattr(item, "checked", False) else "[ ] "
+
         if item.__class__.__name__.startswith("Text"):
-            return _render_text_node(item).strip()
+            return (prefix + _render_text_node(item).strip()).strip()
         if isinstance(item, str):
-            return _escape_html(item).strip()
+            return (prefix + _escape_html(item).strip()).strip()
         if hasattr(item, "text"):
-            return _render_text_node(getattr(item, "text", None)).strip()
+            return (prefix + _render_text_node(getattr(item, "text", None)).strip()).strip()
 
         blocks = getattr(item, "blocks", None)
         if blocks:
-            return " ".join(
+            rendered = " ".join(
                 rendered
                 for rendered in (_render_block(block).strip() for block in blocks)
                 if rendered
             )
+            return (prefix + rendered).strip()
 
-        return _render_text_node(item).strip()
+        return (prefix + _render_text_node(item).strip()).strip()
     except Exception:
         return ""
 
@@ -747,8 +770,8 @@ def _render_block(block: object) -> str:
             caption = _render_caption(getattr(block, "caption", None))
             parts = [part for part in (header, body, caption) if part]
             return "\n".join(parts) + ("\n" if parts else "")
-        if block_type in {"PageBlockChannel", "PageBlockMap"}:
-            label = "[map]" if block_type == "PageBlockMap" else "[channel]"
+        if block_type in {"PageBlockChannel", "PageBlockMap", "InputPageBlockMap"}:
+            label = "[map]" if block_type in {"PageBlockMap", "InputPageBlockMap"} else "[channel]"
             return _render_labeled_block(label, getattr(block, "caption", None))
         if block_type == "PageBlockList":
             return _render_list(block)
@@ -756,13 +779,16 @@ def _render_block(block: object) -> str:
             return _render_list(block, ordered=True)
         if block_type == "PageBlockDivider":
             return "\n---\n"
-        if block_type in {
-            "PageBlockPhoto",
-            "PageBlockVideo",
-            "PageBlockAudio",
-            "PageBlockDocument",
-        }:
-            return _render_labeled_block("[media]", getattr(block, "caption", None))
+        media_labels = {
+            "PageBlockPhoto": ("[photo]", "photo_id", "photo"),
+            "PageBlockVideo": ("[video]", "video_id", "video"),
+            "PageBlockAudio": ("[audio]", "audio_id", "audio"),
+            "PageBlockDocument": ("[document]", "document_id", "document"),
+        }
+        if block_type in media_labels:
+            return _render_media_block(block, *media_labels[block_type])
+        if block_type == "PageBlockUnsupported":
+            return "[unsupported]\n"
     except Exception:
         return ""
 

@@ -1,6 +1,6 @@
 import typing
 
-from .. import helpers, hints
+from .. import hints
 from ..requestiter import RequestIter
 from ..tl import functions, types
 
@@ -251,6 +251,25 @@ class TopicMethods:
     ):
         kwargs["topic"] = topic
         return await self.send_message(entity, message, **kwargs)
+
+    async def reply_topic(
+        self: "TelegramClient",
+        event_or_message,
+        message: "hints.MessageLike" = "",
+        **kwargs,
+    ):
+        """Replies in the same forum topic as ``event_or_message``."""
+
+        source = getattr(event_or_message, "message", event_or_message)
+        chat = await source.get_input_chat()
+        reply_to = getattr(source, "id", None)
+        topic = None
+        reply_header = getattr(source, "reply_to", None)
+        if reply_header is not None:
+            topic = getattr(reply_header, "reply_to_top_id", None) or getattr(
+                reply_header, "reply_to_msg_id", None
+            )
+        return await self.send_message(chat, message, reply_to=reply_to, topic=topic, **kwargs)
 
     async def send_file_to_topic(
         self: "TelegramClient",
