@@ -7,7 +7,7 @@ from .forward import Forward
 from .file import File
 from .. import TLObject, types, functions
 from ... import utils, errors
-from ...extensions import html, markdown
+from ...extensions import html, markdown, richparser
 from ...tl.tlobject import RESTRICT_IDS, DUMMY_MESSAGE_KWARGS
 
 
@@ -440,7 +440,7 @@ class Message(ChatGetter, SenderGetter, TLObject):
         :tl:`MessageService`.
         """
         if self._html_text is None:
-            self._html_text = html.message_to_html(self)
+            self._html_text = richparser.message_to_html(self)
 
         return self._html_text
 
@@ -464,7 +464,7 @@ class Message(ChatGetter, SenderGetter, TLObject):
         return self._rich_plain_text()
 
     def _rich_plain_text(self):
-        rich_html = html.message_to_html(self)
+        rich_html = richparser.message_to_html(self)
         if not rich_html:
             return self.message
         try:

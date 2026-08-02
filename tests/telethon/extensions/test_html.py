@@ -3,7 +3,7 @@ Tests for `telethon.extensions.html`.
 """
 from types import SimpleNamespace
 
-from telethon.extensions import html
+from telethon.extensions import html, richparser
 from telethon.tl import types as tl_types
 from telethon.tl.types import (
     MessageEntityBold,
@@ -38,6 +38,28 @@ def test_malformed_entities():
     entities = [MessageEntityTextUrl(offset=2, length=43, url='https://example.com')]
     result = html.unparse(text, entities)
     assert result == '🏆<a href="https://example.com">Telegram Official Android Challenge is over</a>🏆.'
+
+
+def test_richparser_math_block_keeps_source():
+    message = richparser.html_to_input_rich_message(
+        "<tg-math-block>E=mc^2</tg-math-block>"
+    )
+
+    assert isinstance(message, tl_types.InputRichMessage)
+    assert isinstance(message.blocks[0], tl_types.PageBlockMath)
+    assert message.blocks[0].source == "E=mc^2"
+
+
+def test_richparser_inline_math_keeps_source():
+    message = richparser.html_to_input_rich_message(
+        "<p>Inline <tg-math>x^2</tg-math></p>"
+    )
+
+    paragraph = message.blocks[0]
+    assert isinstance(paragraph, tl_types.PageBlockParagraph)
+    assert isinstance(paragraph.text, tl_types.TextConcat)
+    assert isinstance(paragraph.text.texts[1], tl_types.TextMath)
+    assert paragraph.text.texts[1].source == "x^2"
 
 
 def test_trailing_malformed_entities():
@@ -259,7 +281,7 @@ def test_rich_message_to_html_renders_live_layer_227_sample():
         documents=[],
     )
 
-    assert html.rich_message_to_html(rich_message) == (
+    assert richparser.rich_message_to_html(rich_message) == (
         '👤 <b>/home/esconine:</b> Вы размышляете | ✅ | (+10 IQ) Решенный пример:\n'
         '<pre><code class="math">8 \\times 5 = 40</code></pre>'
     )
@@ -289,7 +311,7 @@ def test_rich_message_text_nodes_escape_text_and_attributes():
         documents=[],
     )
 
-    assert html.rich_message_to_html(rich_message) == (
+    assert richparser.rich_message_to_html(rich_message) == (
         '&lt;plain &amp; &quot;quoted&quot;&gt;'
         '<a href="https://example.com/?a=1&amp;b=&lt;2&gt;"> link &lt;x&gt;</a>'
         '<a href="mailto:a&amp;b@example.com"> mail</a>'
@@ -320,7 +342,7 @@ def test_rich_message_blocks_and_lists_render_to_html():
         documents=[],
     )
 
-    assert html.rich_message_to_html(rich_message) == (
+    assert richparser.rich_message_to_html(rich_message) == (
         '<pre><code class="language-python">x &lt; y</code></pre>\n'
         '<b>Title &lt;&amp;&gt;</b>\n'
         '<blockquote>quote &lt;b&gt;</blockquote>\n'
@@ -337,10 +359,10 @@ def test_message_to_html_prefers_rich_message_and_falls_back_to_unparse():
         documents=[],
     )
 
-    assert html.message_to_html(
+    assert richparser.message_to_html(
         SimpleNamespace(rich_message=rich_message, message='<plain>', entities=[])
     ) == 'rich'
-    assert html.message_to_html(
+    assert richparser.message_to_html(
         SimpleNamespace(rich_message=None, message='<plain>', entities=[])
     ) == '&lt;plain&gt;'
 
@@ -352,8 +374,8 @@ def test_rich_message_unknown_future_types_are_ignored():
     class TextFuture:
         pass
 
-    assert html._render_text_node(TextFuture()) == ''
-    assert html.rich_message_to_html(SimpleNamespace(blocks=[PageBlockFuture()])) == ''
+    assert richparser._render_text_node(TextFuture()) == ''
+    assert richparser.rich_message_to_html(SimpleNamespace(blocks=[PageBlockFuture()])) == ''
 
 
 def test_rich_message_renders_extra_inline_text_tags():
@@ -383,7 +405,7 @@ def test_rich_message_renders_extra_inline_text_tags():
         documents=[],
     )
 
-    assert html.rich_message_to_html(rich_message) == (
+    assert richparser.rich_message_to_html(rich_message) == (
         '<a href="https://example.com/?a=&lt;b&gt;">'
         'https://example.com/?a=&lt;b&gt;</a> '
         '<a href="mailto:me&amp;you@example.com">me&amp;you@example.com</a> '
@@ -422,7 +444,7 @@ def test_rich_message_renders_extra_page_blocks():
         documents=[],
     )
 
-    assert html.rich_message_to_html(rich_message) == (
+    assert richparser.rich_message_to_html(rich_message) == (
         '<b>Sub</b>\n'
         '<b>Heading</b>\n'
         '<i>Foot</i>\n'
@@ -495,7 +517,7 @@ def test_rich_message_renders_deep_block_formatting():
         documents=[],
     )
 
-    assert html.rich_message_to_html(rich_message) == (
+    assert richparser.rich_message_to_html(rich_message) == (
         '<b>Stats</b>\n'
         '<b>Name</b> | <b>Value</b>\n'
         'IQ | +10\n'
@@ -545,7 +567,7 @@ def test_rich_message_renders_media_links_and_new_block_flags():
         documents=[],
     )
 
-    assert html.rich_message_to_html(rich_message) == (
+    assert richparser.rich_message_to_html(rich_message) == (
         '<tg-spoiler><a href="tg://photo?id=10">[photo]</a></tg-spoiler>\n'
         'Photo\n'
         '<a href="tg://video?id=11">[video]</a>\n'
@@ -585,7 +607,7 @@ def test_rich_message_renders_checkbox_list_items():
         documents=[],
     )
 
-    assert html.rich_message_to_html(rich_message) == (
+    assert richparser.rich_message_to_html(rich_message) == (
         '• [x] done\n'
         '• [ ] todo\n'
         'A. [x] ordered'

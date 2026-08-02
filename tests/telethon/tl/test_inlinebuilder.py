@@ -22,8 +22,9 @@ async def test_article_can_send_html_rich_text():
     )
 
     assert isinstance(result.send_message, types.InputBotInlineMessageRichMessage)
-    assert isinstance(result.send_message.rich_message, types.InputRichMessageHTML)
-    assert result.send_message.rich_message.html == "<h1>Title</h1><p><b>Body</b></p>"
+    assert isinstance(result.send_message.rich_message, types.InputRichMessage)
+    assert isinstance(result.send_message.rich_message.blocks[0], types.PageBlockHeading1)
+    assert isinstance(result.send_message.rich_message.blocks[1], types.PageBlockParagraph)
     assert result.send_message.rich_message.rtl is True
     assert result.send_message.rich_message.noautolink is True
 
@@ -75,8 +76,8 @@ async def test_rich_article_wraps_article_rich_message():
     )
 
     assert isinstance(result.send_message, types.InputBotInlineMessageRichMessage)
-    assert isinstance(result.send_message.rich_message, types.InputRichMessageHTML)
-    assert result.send_message.rich_message.html == "<h1>Title</h1>"
+    assert isinstance(result.send_message.rich_message, types.InputRichMessage)
+    assert isinstance(result.send_message.rich_message.blocks[0], types.PageBlockHeading1)
 
 
 @pytest.mark.asyncio

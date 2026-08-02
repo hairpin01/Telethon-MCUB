@@ -4,6 +4,7 @@ import typing
 import warnings
 
 from .. import helpers, utils, errors, hints
+from ..extensions import richparser
 from ..requestiter import RequestIter
 from ..tl import types, functions
 from ..tl.tlobject import RESTRICT_IDS
@@ -675,6 +676,12 @@ class MessageMethods:
         if rich_message is not None:
             return rich_message
         if html is not None:
+            if files is None:
+                return richparser.html_to_input_rich_message(
+                    html,
+                    rtl=rtl,
+                    noautolink=noautolink,
+                )
             return types.InputRichMessageHTML(
                 html=html,
                 rtl=rtl,

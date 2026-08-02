@@ -3,6 +3,7 @@ import re
 
 from .. import functions, types
 from ... import utils
+from ...extensions import richparser
 
 _TYPE_TO_MIMES = {
     "gif": ["image/gif"],  # 'video/mp4' too, but that's used for video
@@ -780,6 +781,12 @@ class InlineBuilder:
 
         mode = rich_parse_mode.lower() if isinstance(rich_parse_mode, str) else rich_parse_mode
         if mode in ("html", "htm"):
+            if rich_files is None:
+                return richparser.html_to_input_rich_message(
+                    rich_text,
+                    rtl=rich_rtl,
+                    noautolink=rich_noautolink,
+                )
             return types.InputRichMessageHTML(
                 rich_text,
                 rtl=rich_rtl,

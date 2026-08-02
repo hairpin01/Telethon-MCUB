@@ -196,12 +196,12 @@ class _RichMessageClient(MessageMethods):
 
 
 @pytest.mark.asyncio
-async def test_send_rich_message_uses_input_rich_message_html():
+async def test_send_rich_message_uses_input_rich_message_blocks():
     client = _RichMessageClient()
 
     request = await client.send_rich_message(
         "peer",
-        "<b>hello</b>",
+        '<details title="T"><p><b>hello</b></p></details>',
         message="plain",
         buttons="markup",
     )
@@ -210,8 +210,13 @@ async def test_send_rich_message_uses_input_rich_message_html():
     assert request.peer == "peer"
     assert request.message == "plain"
     assert request.reply_markup == "markup"
-    assert isinstance(request.rich_message, types.InputRichMessageHTML)
-    assert request.rich_message.html == "<b>hello</b>"
+    assert isinstance(request.rich_message, types.InputRichMessage)
+    assert len(request.rich_message.blocks) == 1
+    details = request.rich_message.blocks[0]
+    assert isinstance(details, types.PageBlockDetails)
+    assert isinstance(details.title, types.TextPlain)
+    assert details.title.text == "T"
+    assert isinstance(details.blocks[0], types.PageBlockParagraph)
 
 
 @pytest.mark.asyncio
@@ -246,8 +251,8 @@ async def test_send_draft_message_uses_rich_message_draft_action():
     assert request.top_msg_id == 777
     assert isinstance(request.action, types.InputSendMessageRichMessageDraftAction)
     assert request.action.random_id == 42
-    assert isinstance(request.action.rich_message, types.InputRichMessageHTML)
-    assert request.action.rich_message.html == "<tg-thinking>Thinking...</tg-thinking>"
+    assert isinstance(request.action.rich_message, types.InputRichMessage)
+    assert isinstance(request.action.rich_message.blocks[0], types.PageBlockThinking)
     assert request.action.rich_message.noautolink is True
 
 
@@ -268,7 +273,7 @@ async def test_edit_rich_message_uses_edit_message_request():
     request = await client.edit_rich_message(
         "peer",
         123,
-        "<b>edited</b>",
+        "<p><b>edited</b></p>",
         text="plain",
     )
 
@@ -276,8 +281,8 @@ async def test_edit_rich_message_uses_edit_message_request():
     assert request.peer == "peer"
     assert request.id == 123
     assert request.message == "plain"
-    assert isinstance(request.rich_message, types.InputRichMessageHTML)
-    assert request.rich_message.html == "<b>edited</b>"
+    assert isinstance(request.rich_message, types.InputRichMessage)
+    assert isinstance(request.rich_message.blocks[0], types.PageBlockParagraph)
 
 
 @pytest.mark.asyncio
@@ -310,12 +315,12 @@ async def test_message_edit_rich_delegates_to_client_edit_rich_message():
 
     message.get_input_chat = get_input_chat
 
-    result = await message.edit_rich("<b>edited</b>", link_preview=False)
+    result = await message.edit_rich("<p><b>edited</b></p>", link_preview=False)
 
     assert isinstance(result, functions.messages.EditMessageRequest)
     assert result.peer == "peer"
     assert result.id == 123
-    assert result.rich_message.html == "<b>edited</b>"
+    assert isinstance(result.rich_message, types.InputRichMessage)
 
 
 def test_message_text_uses_markdown_formatting():
