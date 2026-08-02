@@ -1,5 +1,9 @@
 # Telethon-MCUB Changelog
 
+## v1.44.3 (2026-08-02)
+
+- **Inline copy buttons**: added `Button.copy(...)` support for creating `KeyboardButtonCopy` inline buttons.
+
 ## v1.44.2 (2026-07-31)
 
 - **Inline rich articles**: `InlineBuilder.article(...)` now supports `rich_text`, `rich_parse_mode`, `rich_message`, `rich_rtl`, `rich_noautolink`, and `rich_files`, producing `InputBotInlineMessageRichMessage` results for inline mode. Added `InlineBuilder.rich_article(...)` as a shorter wrapper.

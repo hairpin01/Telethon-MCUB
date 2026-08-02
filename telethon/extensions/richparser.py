@@ -833,6 +833,7 @@ class RichHTMLParser(HTMLParser):
                 "figcaption", "caption_credit",
                 "td", "th", "summary", "thinking",
                 "pre", "math_inline", "math_block",
+                "tg_emoji", "tg_time",
                 # Inline frames accept text too.
                 "inline",
             ):

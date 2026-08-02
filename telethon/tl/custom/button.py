@@ -63,8 +63,8 @@ class Button:
     instances instead making them yourself (i.e. don't do ``Button(...)``
     but instead use methods line `Button.inline(...) <inline>` etc.
 
-    You can use `inline`, `switch_inline`, `url`, `auth`, `buy` and `game`
-    together to create inline buttons (under the message).
+    You can use `inline`, `switch_inline`, `url`, `copy`, `auth`, `buy`
+    and `game` together to create inline buttons (under the message).
 
     You can use `text`, `request_location`, `request_phone` and `request_poll`
     together to create a reply markup (replaces the user keyboard).
@@ -198,6 +198,30 @@ class Button:
                 Custom emoji ID to use as button icon. Requires Telegram Premium.
         """
         return types.KeyboardButtonUrl(text, url or text, style=_parse_style(style, icon))
+
+    @staticmethod
+    def copy(text, copy_text=None, *, style=None, icon=None):
+        """
+        Creates a new inline button to copy the desired text on click.
+
+        If no `copy_text` is given, the `text` will be copied instead.
+
+        You cannot detect that the user clicked this button directly.
+
+        When the user clicks this button, Telegram will copy the given text
+        to their clipboard.
+
+        Args:
+            style (`str`, optional):
+                Button color. One of ``'primary'``, ``'success'``, ``'danger'``.
+
+            icon (`int`, optional):
+                Custom emoji ID to use as button icon. Requires Telegram Premium.
+        """
+        if copy_text is None:
+            copy_text = text
+
+        return types.KeyboardButtonCopy(text, copy_text, style=_parse_style(style, icon))
 
     @staticmethod
     def auth(text, url=None, *, bot=None, write_access=False, fwd_text=None, style=None, icon=None):
