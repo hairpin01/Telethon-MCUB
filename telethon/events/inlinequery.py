@@ -228,6 +228,18 @@ class InlineQuery(EventBuilder):
             if text is not None:
                 kwargs.setdefault("text", text)
 
+            if (
+                kwargs.get("rich_text") is not None
+                and "rich_message" not in kwargs
+                and "rich_files" not in kwargs
+            ):
+                rich_parse_mode = kwargs.get("rich_parse_mode", "html")
+                if (
+                    isinstance(rich_parse_mode, str)
+                    and rich_parse_mode.lower() in ("html", "htm")
+                ):
+                    kwargs["rich_files"] = []
+
             return await self.answer(
                 [self.builder.article(title, **kwargs)],
                 cache_time=cache_time,

@@ -59,9 +59,15 @@ Messages
     :nosignatures:
 
     send_message
+    safe_send_message
+    send_rich_message
     edit_message
+    edit_rich_message
     delete_messages
     forward_messages
+    send_album
+    send_draft_message
+    send_rich_message_draft
     iter_messages
     get_messages
     pin_message
@@ -221,6 +227,7 @@ Topics
     iter_topic_messages
     send_to_topic
     send_file_to_topic
+    reply_topic
 
 Reactions
 ---------

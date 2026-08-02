@@ -276,6 +276,7 @@ class InlineBuilder:
 
     async def _normalize_rich_media_for_message(self, rich_media=None, rich_files=None, rich_text=None):
         result = []
+        has_rich_files = rich_files is not None
         refs = self._extract_rich_media_refs(rich_text)
         if rich_files:
             result.extend(rich_files if isinstance(rich_files, (list, tuple)) else [rich_files])
@@ -288,7 +289,7 @@ class InlineBuilder:
                 result.append(rich_file)
                 if refs.get(media_id) == "media":
                     rich_text = self._replace_media_ref_type(rich_text, media_id, resolved_type)
-        return rich_text, result or None
+        return rich_text, result if result or has_rich_files else None
 
     @staticmethod
     def _extract_rich_media_refs(rich_text):
