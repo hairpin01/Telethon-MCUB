@@ -1,5 +1,6 @@
 from .. import types
 from ... import utils
+from urllib.parse import urlsplit
 
 
 def _parse_style(style=None, icon=None):
@@ -43,6 +44,15 @@ def _parse_style(style=None, icon=None):
         return types.KeyboardButtonStyle(bg_danger=True)
     else:
         raise ValueError(f"Unknown style '{style}'. Use: 'primary', 'success', 'danger'")
+
+
+def _safe_button_url(url):
+    url = str(url)
+    if any(ord(char) < 32 or ord(char) == 127 for char in url):
+        raise ValueError("button URL contains control characters")
+    if urlsplit(url).scheme.lower() not in {"http", "https", "tg"}:
+        raise ValueError("button URL must use http, https, or tg")
+    return url
 
 
 class Button:
@@ -102,19 +112,7 @@ class Button:
         """
         Returns `True` if the button belongs to an inline keyboard.
         """
-        return isinstance(
-            button,
-            (
-                types.KeyboardButtonCopy,
-                types.KeyboardButtonBuy,
-                types.KeyboardButtonCallback,
-                types.KeyboardButtonGame,
-                types.KeyboardButtonSwitchInline,
-                types.KeyboardButtonUrl,
-                types.InputKeyboardButtonUrlAuth,
-                types.KeyboardButtonWebView,
-            ),
-        )
+        return isinstance(button, types.KeyboardInlineButton)
 
     @staticmethod
     def inline(text, data=None, *, style=None, icon=None):
@@ -149,7 +147,7 @@ class Button:
         if len(data) > 64:
             raise ValueError("Too many bytes for the data")
 
-        return types.KeyboardButtonCallback(text, data, style=_parse_style(style, icon))
+        return types.KeyboardInlineButton(text, types.InlineButtonTypeCallback(data), style=_parse_style(style, icon))
 
     @staticmethod
     def switch_inline(text, query="", same_peer=False, *, style=None, icon=None):
@@ -174,7 +172,7 @@ class Button:
             icon (`int`, optional):
                 Custom emoji ID to use as button icon. Requires Telegram Premium.
         """
-        return types.KeyboardButtonSwitchInline(text, query, same_peer, style=_parse_style(style, icon))
+        return types.KeyboardInlineButton(text, types.InlineButtonTypeSwitchInline(query, same_peer), style=_parse_style(style, icon))
 
     @staticmethod
     def url(text, url=None, *, style=None, icon=None):
@@ -197,7 +195,7 @@ class Button:
             icon (`int`, optional):
                 Custom emoji ID to use as button icon. Requires Telegram Premium.
         """
-        return types.KeyboardButtonUrl(text, url or text, style=_parse_style(style, icon))
+        return types.KeyboardInlineButton(text, types.InlineButtonTypeUrl(_safe_button_url(url or text)), style=_parse_style(style, icon))
 
     @staticmethod
     def copy(text, copy_text=None, *, style=None, icon=None):
@@ -221,7 +219,7 @@ class Button:
         if copy_text is None:
             copy_text = text
 
-        return types.KeyboardButtonCopy(text, copy_text, style=_parse_style(style, icon))
+        return types.KeyboardInlineButton(text, types.InlineButtonTypeCopy(copy_text), style=_parse_style(style, icon))
 
     @staticmethod
     def auth(text, url=None, *, bot=None, write_access=False, fwd_text=None, style=None, icon=None):
@@ -267,12 +265,14 @@ class Button:
         When the user clicks this button, a confirmation box will be shown
         to the user asking whether they want to login to the specified domain.
         """
-        return types.InputKeyboardButtonUrlAuth(
-            text=text,
-            url=url or text,
-            bot=utils.get_input_user(bot or types.InputUserSelf()),
-            request_write_access=write_access,
-            fwd_text=fwd_text,
+        return types.KeyboardInlineButton(
+            text,
+            types.InputInlineButtonTypeUrlAuth(
+                url=_safe_button_url(url or text),
+                bot=utils.get_input_user(bot or types.InputUserSelf()),
+                request_write_access=write_access,
+                fwd_text=fwd_text,
+            ),
             style=_parse_style(style, icon),
         )
 
@@ -332,7 +332,7 @@ class Button:
         same text on their own.
         """
         return cls(
-            types.KeyboardButton(text, style=_parse_style(style, icon)),
+            types.KeyboardButton(text, types.ButtonTypeDefault(), style=_parse_style(style, icon)),
             resize=resize,
             single_use=single_use,
             selective=selective,
@@ -371,7 +371,7 @@ class Button:
         bot, and if confirmed a message with geo media will be sent.
         """
         return cls(
-            types.KeyboardButtonRequestGeoLocation(text, style=_parse_style(style, icon)),
+            types.KeyboardButton(text, types.ButtonTypeRequestGeoLocation(), style=_parse_style(style, icon)),
             resize=resize,
             single_use=single_use,
             selective=selective,
@@ -410,7 +410,7 @@ class Button:
         bot, and if confirmed a message with contact media will be sent.
         """
         return cls(
-            types.KeyboardButtonRequestPhone(text, style=_parse_style(style, icon)),
+            types.KeyboardButton(text, types.ButtonTypeRequestPhone(), style=_parse_style(style, icon)),
             resize=resize,
             single_use=single_use,
             selective=selective,
@@ -457,7 +457,7 @@ class Button:
         poll will be shown, and if they do create one, the poll will be sent.
         """
         return cls(
-            types.KeyboardButtonRequestPoll(text, quiz=force_quiz, style=_parse_style(style, icon)),
+            types.KeyboardButton(text, types.ButtonTypeRequestPoll(quiz=force_quiz), style=_parse_style(style, icon)),
             resize=resize,
             single_use=single_use,
             selective=selective,
@@ -509,7 +509,7 @@ class Button:
             icon (`int`, optional):
                 Custom emoji ID to use as button icon. Requires Telegram Premium.
         """
-        return types.KeyboardButtonBuy(text, style=_parse_style(style, icon))
+        return types.KeyboardInlineButton(text, types.InlineButtonTypeBuy(), style=_parse_style(style, icon))
 
     @staticmethod
     def game(text, *, style=None, icon=None):
@@ -530,7 +530,7 @@ class Button:
             icon (`int`, optional):
                 Custom emoji ID to use as button icon. Requires Telegram Premium.
         """
-        return types.KeyboardButtonGame(text, style=_parse_style(style, icon))
+        return types.KeyboardInlineButton(text, types.InlineButtonTypeGame(), style=_parse_style(style, icon))
 
     @classmethod
     def request_managed_bot(
@@ -586,11 +586,9 @@ class Button:
         )
         
         return cls(
-            tl_types.KeyboardButtonRequestPeer(
-                text=text,
-                button_id=0,
-                peer_type=peer_type,
-                max_quantity=1,
+            tl_types.KeyboardButton(
+                text,
+                tl_types.ButtonTypeRequestPeer(0, peer_type, 1),
                 style=_parse_style(style, icon),
             ),
             resize=resize,

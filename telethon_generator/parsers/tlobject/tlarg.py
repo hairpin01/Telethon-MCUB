@@ -106,6 +106,8 @@ class TLArg:
 
         # Default values
         self.is_vector = False
+        self.vector_types = []
+        self.use_vector_id = False
         self.flag = None  # name of the flag to check if self is present
         self.skip_constructor_id = False
         self.flag_index = -1  # bit index of the flag to check if self is present
@@ -137,18 +139,17 @@ class TLArg:
                 # Update the type to match the exact type, not the "flagged" one
                 self.type = flag_match.group(3)
 
-            # Then check if the type is a Vector<REAL_TYPE>
-            vector_match = re.match(r"[Vv]ector<([\w\d.]+)>", self.type)
-            if vector_match:
-                self.is_vector = True
+            # Keep every Vector level so nested vectors can be generated
+            # without losing whether each level uses the constructor ID.
+            vector_match = re.fullmatch(r"([Vv]ector)<(.+)>", self.type)
+            while vector_match:
+                self.vector_types.append(vector_match.group(1))
+                self.type = vector_match.group(2)
+                vector_match = re.fullmatch(r"([Vv]ector)<(.+)>", self.type)
 
-                # If the type's first letter is not uppercase, then
-                # it is a constructor and we use (read/write) its ID
-                # as pinpointed on issue #81.
-                self.use_vector_id = self.type[0] == "V"
-
-                # Update the type to match the one inside the vector
-                self.type = vector_match.group(1)
+            self.is_vector = bool(self.vector_types)
+            if self.is_vector:
+                self.use_vector_id = self.vector_types[0] == "Vector"
 
             # See use_vector_id. An example of such case is ipPort in
             # help.configSpecial
@@ -183,7 +184,7 @@ class TLArg:
             "Bool": "bool",
             "true": "bool",
         }.get(cls, "'Type{}'".format(cls))
-        if self.is_vector:
+        for _ in self.vector_types:
             result = "List[{}]".format(result)
         if self.flag and cls != "date":
             result = "Optional[{}]".format(result)
@@ -196,11 +197,8 @@ class TLArg:
         if self.flag_indicator:
             real_type = "#"
 
-        if self.is_vector:
-            if self.use_vector_id:
-                real_type = "Vector<{}>".format(real_type)
-            else:
-                real_type = "vector<{}>".format(real_type)
+        for vector_type in reversed(self.vector_types):
+            real_type = "{}<{}>".format(vector_type, real_type)
 
         if self.is_generic:
             real_type = "!{}".format(real_type)

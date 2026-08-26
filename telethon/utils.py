@@ -93,7 +93,8 @@ def get_display_name(entity):
             return ""
 
     elif isinstance(
-        entity, (types.Chat, types.ChatForbidden, types.Channel, types.ChannelForbidden)
+        entity, (types.Chat, types.ChatForbidden, types.Channel, types.ChannelForbidden,
+                 types.Community, types.CommunityForbidden)
     ):
         return entity.title
 
@@ -189,12 +190,12 @@ def get_input_peer(entity, allow_self=True, check_hash=True):
     if isinstance(entity, (types.Chat, types.ChatEmpty, types.ChatForbidden)):
         return types.InputPeerChat(entity.id)
 
-    if isinstance(entity, types.Channel):
+    if isinstance(entity, (types.Channel, types.Community)):
         if (entity.access_hash is not None and not entity.min) or not check_hash:
             return types.InputPeerChannel(entity.id, entity.access_hash)
         else:
             raise TypeError("Channel without access_hash or min info cannot be input")
-    if isinstance(entity, types.ChannelForbidden):
+    if isinstance(entity, (types.ChannelForbidden, types.CommunityForbidden)):
         # "channelForbidden are never min", and since their hash is
         # also not optional, we assume that this truly is the case.
         return types.InputPeerChannel(entity.id, entity.access_hash)
@@ -245,7 +246,7 @@ def get_input_channel(entity):
     except AttributeError:
         _raise_cast_fail(entity, "InputChannel")
 
-    if isinstance(entity, (types.Channel, types.ChannelForbidden)):
+    if isinstance(entity, (types.Channel, types.ChannelForbidden, types.Community, types.CommunityForbidden)):
         return types.InputChannel(entity.id, entity.access_hash or 0)
 
     if isinstance(entity, types.InputPeerChannel):
@@ -1010,7 +1011,7 @@ def get_peer(peer):
             ),
         ):
             return peer.peer
-        elif isinstance(peer, types.ChannelFull):
+        elif isinstance(peer, (types.ChannelFull, types.CommunityFull)):
             return types.PeerChannel(peer.id)
         elif isinstance(peer, types.UserEmpty):
             return types.PeerUser(peer.id)

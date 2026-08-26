@@ -3,18 +3,19 @@ from telethon.client.buttons import ButtonMethods
 from telethon.tl import types
 
 
-def test_copy_button_uses_keyboard_button_copy():
+def test_copy_button_uses_unified_inline_button():
     button = Button.copy("Copy", "secret")
 
-    assert isinstance(button, types.KeyboardButtonCopy)
+    assert isinstance(button, types.KeyboardInlineButton)
     assert button.text == "Copy"
-    assert button.copy_text == "secret"
+    assert isinstance(button.type, types.InlineButtonTypeCopy)
+    assert button.type.copy_text == "secret"
 
 
 def test_copy_button_defaults_to_visible_text():
     button = Button.copy("Copy")
 
-    assert button.copy_text == "Copy"
+    assert button.type.copy_text == "Copy"
 
 
 def test_copy_button_builds_inline_markup():

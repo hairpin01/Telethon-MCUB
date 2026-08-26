@@ -227,6 +227,7 @@ class RichText:
         aligns=None,
         bordered=None,
         striped=None,
+        compact=None,
     ):
         body = []
         if title:
@@ -260,8 +261,28 @@ class RichText:
                 )
             )
         return self.tag_raw(
-            "table", "".join(body), bordered=bordered, striped=striped
+            "table", "".join(body), bordered=bordered, striped=striped, compact=compact
         )
+
+    def button(self, value, *, type="url", style=None, raw=False, **attrs):
+        """Append a parser-consumable single-button official row."""
+        html = str(value) if raw else escape(str(value))
+        button = self._tag_raw_html("tg-button", html, type=type, style=style, **attrs)
+        return self.tag_raw("tg-button-row", button)
+
+    def button_row(self, buttons, *, align=None, raw=False):
+        """Append a ``tg-button-row`` from button HTML or button specifications."""
+        parts = []
+        for button in buttons:
+            if isinstance(button, str):
+                parts.append(button if raw else self._tag_html("tg-button", button))
+            elif isinstance(button, dict):
+                values = dict(button)
+                value = values.pop("text", "")
+                parts.append(self._tag_raw_html("tg-button", str(value) if values.pop("raw", False) else escape(str(value)), **values))
+            else:
+                parts.append(str(button))
+        return self.tag_raw("tg-button-row", "".join(parts), align=align)
 
     def footer(self, value):
         return self.tag("footer", value)

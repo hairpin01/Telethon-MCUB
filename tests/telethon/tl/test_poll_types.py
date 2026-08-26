@@ -35,7 +35,7 @@ def test_poll_answer():
 
 def test_keyboard_button_creation():
     """Test KeyboardButton creation"""
-    btn = types.KeyboardButton(text='Click me')
+    btn = types.KeyboardButton(text='Click me', type=types.ButtonTypeDefault())
     assert btn.text == 'Click me'
 
 
@@ -108,11 +108,13 @@ def test_button_request_managed_bot():
         suggested_username="test_bot"
     )
     
-    assert isinstance(btn.button, types.KeyboardButtonRequestPeer)
+    assert isinstance(btn.button, types.KeyboardButton)
     assert btn.button.text == "Create a bot"
-    assert btn.button.peer_type.bot_managed is True
-    assert btn.button.peer_type.suggested_name == "Test Bot"
-    assert btn.button.peer_type.suggested_username == "test_bot"
+    assert isinstance(btn.button.type, types.ButtonTypeRequestPeer)
+    assert isinstance(btn.button.type.peer_type, types.RequestPeerTypeCreateBot)
+    assert btn.button.type.peer_type.bot_managed is True
+    assert btn.button.type.peer_type.suggested_name == "Test Bot"
+    assert btn.button.type.peer_type.suggested_username == "test_bot"
 
 
 def test_bot_update_event():

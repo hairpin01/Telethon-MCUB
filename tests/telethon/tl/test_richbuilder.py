@@ -1,4 +1,6 @@
 from telethon.tl.custom import RichBuilder, RichText
+from telethon.extensions import richparser
+from telethon.tl import types
 
 
 def test_rich_text_escapes_text_and_attrs():
@@ -79,6 +81,25 @@ def test_rich_builder_lists_details_and_table_escape_values():
         '<tr><td>1 &lt; 2</td><td align="right">ok</td></tr></table>'
     )
 
+
+def test_rich_builder_compact_table_and_button_rows_escape_attributes():
+    rich = (
+        RichBuilder()
+        .table([["cell"]], compact=True)
+        .button("Open <x>", type="url", url='https://e.test/?q="x"')
+        .button_row([{"text": "Copy", "type": "copy_text", "text_": "copy"}], align="center")
+    )
+
+    assert str(rich) == (
+        '<table compact><tr><td>cell</td></tr></table>'
+        '<tg-button-row><tg-button type="url" url="https://e.test/?q=&quot;x&quot;">Open &lt;x&gt;</tg-button></tg-button-row>'
+        '<tg-button-row align="center"><tg-button type="copy_text" text="copy">Copy</tg-button></tg-button-row>'
+    )
+    message = richparser.html_to_input_rich_message(str(rich))
+    assert isinstance(message.blocks[-2], types.PageBlockButtonRow)
+    assert message.blocks[-2].buttons[0].type.url == 'https://e.test/?q="x"'
+    assert isinstance(message.blocks[-1], types.PageBlockButtonRow)
+    assert message.blocks[-1].buttons[0].type.copy_text == 'copy'
 
 def test_rich_builder_official_block_helpers():
     rich = (

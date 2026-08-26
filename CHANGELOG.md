@@ -1,8 +1,16 @@
 # Telethon-MCUB Changelog
 
-## v1.44.3 (2026-08-02)
+## v1.44.3 (2026-08-26)
 
 - **Inline copy buttons**: added `Button.copy(...)` support for creating `KeyboardButtonCopy` inline buttons.
+
+- **Unified Layer-229 keyboard buttons**: migrated custom button helpers, markup construction, and message-button inspection to the current inline/reply button wrappers.
+
+- **Bidirectional Rich HTML**: added semantic layout, table, list, inline code, math, marked, spoiler, and nested-block Rich Message HTML round-tripping.
+
+- **Layer-229 Rich buttons**: added `PageBlockButtonRow`/`PageButton` support with official `tg-button-row`/`tg-button` HTML, button styles and types, plus byte-safe callback data handling.
+
+- **Rich fallbacks and builder**: added safe visible-text fallbacks for rich messages and `RichBuilder` table/button-row helpers.
 
 ## v1.44.2 (2026-07-31)
 

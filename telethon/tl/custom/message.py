@@ -464,13 +464,9 @@ class Message(ChatGetter, SenderGetter, TLObject):
         return self._rich_plain_text()
 
     def _rich_plain_text(self):
-        rich_html = richparser.message_to_html(self)
-        if not rich_html:
-            return self.message
-        try:
-            return html.parse(rich_html)[0]
-        except Exception:
-            return rich_html
+        if self.rich_message and getattr(self.rich_message, "blocks", None):
+            return richparser.rich_message_to_text(self.rich_message)
+        return self.message
 
     @raw_text.setter
     def raw_text(self, value):
@@ -1188,7 +1184,7 @@ class Message(ChatGetter, SenderGetter, TLObject):
             if not chat:
                 return None
 
-            but = types.KeyboardButtonCallback("", data)
+            but = types.KeyboardInlineButton("", types.InlineButtonTypeCallback(data))
             return await MessageButton(self._client, but, chat, None, self.id).click(
                 share_phone=share_phone,
                 share_geo=share_geo,
@@ -1375,9 +1371,9 @@ class Message(ChatGetter, SenderGetter, TLObject):
 
         for row in self.reply_markup.rows:
             for button in row.buttons:
-                if isinstance(button, types.KeyboardButtonSwitchInline):
+                if isinstance(button, types.KeyboardInlineButton) and isinstance(button.type, types.InlineButtonTypeSwitchInline):
                     # no via_bot_id means the bot sent the message itself (#1619)
-                    if button.same_peer or not self.via_bot_id:
+                    if button.type.same_peer or not self.via_bot_id:
                         bot = self.input_sender
                         if not bot:
                             raise ValueError("No input sender")

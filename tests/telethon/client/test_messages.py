@@ -233,6 +233,36 @@ async def test_send_rich_message_falls_back_when_peer_rejects_rich_message():
 
 
 @pytest.mark.asyncio
+async def test_send_rich_message_prebuilt_fallback_uses_visible_text():
+    client = _RichMessageClient(fail=True)
+    rich_message = types.InputRichMessage([
+        types.PageBlockParagraph(types.TextPlain('visible'))
+    ])
+
+    await client.send_rich_message('peer', rich_message=rich_message)
+
+    assert client.fallback_call[0] == ('peer', 'visible')
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('rich_message', 'expected_text', 'expected_parse_mode'),
+    [
+        (types.InputRichMessageHTML(html='<b>html</b>'), '<b>html</b>', 'html'),
+        (types.InputRichMessageMarkdown(markdown='**markdown**'), '**markdown**', ()),
+    ],
+)
+async def test_send_rich_message_prebuilt_markup_fallback(rich_message, expected_text, expected_parse_mode):
+    client = _RichMessageClient(fail=True)
+
+    await client.send_rich_message('peer', rich_message=rich_message)
+
+    args, kwargs = client.fallback_call
+    assert args == ('peer', expected_text)
+    assert kwargs['parse_mode'] == expected_parse_mode
+
+
+@pytest.mark.asyncio
 async def test_send_draft_message_uses_rich_message_draft_action():
     client = _RichMessageClient()
 
@@ -296,6 +326,36 @@ async def test_edit_rich_message_falls_back_when_peer_rejects_rich_message():
     assert args == ("peer", 123, "<b>edited</b>")
     assert kwargs["parse_mode"] == "html"
     assert kwargs["link_preview"] is False
+
+
+@pytest.mark.asyncio
+async def test_edit_rich_message_prebuilt_fallback_uses_visible_text():
+    client = _RichMessageClient(fail=True)
+    rich_message = types.InputRichMessage([
+        types.PageBlockParagraph(types.TextPlain('visible edit'))
+    ])
+
+    await client.edit_rich_message('peer', 123, rich_message=rich_message)
+
+    assert client.edit_fallback_call[0] == ('peer', 123, 'visible edit')
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ('rich_message', 'expected_text', 'expected_parse_mode'),
+    [
+        (types.InputRichMessageHTML(html='<i>html edit</i>'), '<i>html edit</i>', 'html'),
+        (types.InputRichMessageMarkdown(markdown='*markdown edit*'), '*markdown edit*', ()),
+    ],
+)
+async def test_edit_rich_message_prebuilt_markup_fallback(rich_message, expected_text, expected_parse_mode):
+    client = _RichMessageClient(fail=True)
+
+    await client.edit_rich_message('peer', 123, rich_message=rich_message)
+
+    args, kwargs = client.edit_fallback_call
+    assert args == ('peer', 123, expected_text)
+    assert kwargs['parse_mode'] == expected_parse_mode
 
 
 @pytest.mark.asyncio

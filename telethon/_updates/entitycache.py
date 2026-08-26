@@ -42,7 +42,7 @@ class EntityCache:
             if getattr(c, "access_hash", None) and not getattr(c, "min", None):
                 ty = (
                     EntityType.MEGAGROUP
-                    if c.megagroup
+                    if getattr(c, "megagroup", None)
                     else (
                         EntityType.GIGAGROUP
                         if getattr(c, "gigagroup", None)

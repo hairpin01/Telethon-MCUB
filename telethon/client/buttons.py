@@ -83,11 +83,12 @@ class ButtonMethods:
                 is_inline |= inline
                 is_normal |= not inline
 
-                if button.SUBCLASS_OF_ID == 0xBAD74A3:  # crc32(b'KeyboardButton')
+                if isinstance(button, (types.KeyboardButton, types.KeyboardInlineButton)):
                     current.append(button)
 
             if current:
-                rows.append(types.KeyboardButtonRow(current))
+                row_type = types.KeyboardInlineButtonRow if is_inline and not is_normal else types.KeyboardButtonRow
+                rows.append(row_type(current))
 
         if is_inline and is_normal:
             raise ValueError("You cannot mix inline with normal buttons")

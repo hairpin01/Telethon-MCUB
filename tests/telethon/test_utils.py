@@ -4,8 +4,10 @@ import pathlib
 import pytest
 
 from telethon import utils
+from telethon._updates.entitycache import EntityCache
 from telethon.tl.types import (
-    MessageMediaGame, Game, PhotoEmpty
+    MessageMediaGame, Game, PhotoEmpty, Community, CommunityForbidden,
+    InputPeerChannel, PeerChannel
 )
 
 
@@ -56,3 +58,23 @@ def test_private_get_extension():
 
 def test_rle_encode_trailing_zeros():
     assert utils._rle_encode(b'\x12\x00\x00\x00\x00') == b'\x12\x00\x04'
+
+
+def test_community_entities_are_channel_like_peers():
+    community = Community(123, 'Community', PhotoEmpty(0), None, access_hash=456)
+    forbidden = CommunityForbidden(124, 'Forbidden', access_hash=789)
+
+    assert utils.get_peer(community) == PeerChannel(123)
+    assert utils.get_peer_id(community) == utils.get_peer_id(PeerChannel(123))
+    assert utils.get_input_peer(community) == InputPeerChannel(123, 456)
+    assert utils.get_input_peer(forbidden) == InputPeerChannel(124, 789)
+
+    minimum = Community(125, 'Minimum', PhotoEmpty(0), None, min=True, access_hash=1)
+    with pytest.raises(TypeError):
+        utils.get_input_peer(minimum)
+    assert utils.get_input_peer(minimum, check_hash=False) == InputPeerChannel(125, 1)
+
+    cache = EntityCache()
+    cache.extend([], [community, forbidden])
+    assert cache.get(123).hash == 456
+    assert cache.get(124).hash == 789

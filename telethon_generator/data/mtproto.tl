@@ -1,6 +1,7 @@
 // Core types (no need to gen)
 
-//vector#1cb5c415 {t:Type} # [ t ] = Vector t;
+
+
 
 ///////////////////////////////
 /// Authorization key creation
@@ -103,6 +104,10 @@ tlsBlockDomain = TlsBlock;
 tlsBlockGrease seed:int = TlsBlock;
 tlsBlockPublicKey = TlsBlock;
 tlsBlockScope entries:Vector<TlsBlock> = TlsBlock;
+tlsBlockPermutation entries:Vector<Vector<TlsBlock>> = TlsBlock;
+tlsBlockM = TlsBlock;
+tlsBlockE = TlsBlock;
+tlsBlockPadding = TlsBlock;
 
 ---functions---
 

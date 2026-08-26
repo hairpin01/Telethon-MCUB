@@ -313,16 +313,24 @@ def _write_to_dict(tlobject, builder):
         builder.write("'{}': ", arg.name)
         if arg.type in BASE_TYPES:
             if arg.is_vector:
-                builder.write("[] if self.{0} is None else self.{0}[:]", arg.name)
+                if len(arg.vector_types) == 1:
+                    builder.write("[] if self.{0} is None else self.{0}[:]", arg.name)
+                else:
+                    builder.write("[] if self.{0} is None else ", arg.name)
+                    _write_vector_to_dict(builder, arg, "self.{}".format(arg.name))
             else:
                 builder.write("self.{}", arg.name)
         else:
             if arg.is_vector:
-                builder.write(
-                    "[] if self.{0} is None else [x.to_dict() "
-                    "if isinstance(x, TLObject) else x for x in self.{0}]",
-                    arg.name,
-                )
+                builder.write("[] if self.{0} is None else ", arg.name)
+                if len(arg.vector_types) == 1:
+                    builder.write(
+                        "[x.to_dict() if isinstance(x, TLObject) "
+                        "else x for x in self.{0}]",
+                        arg.name,
+                    )
+                else:
+                    _write_vector_to_dict(builder, arg, "self.{}".format(arg.name))
             else:
                 builder.write(
                     "self.{0}.to_dict() "
@@ -335,6 +343,20 @@ def _write_to_dict(tlobject, builder):
     builder.writeln("}")
 
     builder.end_block()
+
+
+def _write_vector_to_dict(builder, arg, name, vector_index=0):
+    item_name = "x" if vector_index == 0 else "x{}".format(vector_index)
+    builder.write("[")
+    if vector_index + 1 < len(arg.vector_types):
+        _write_vector_to_dict(builder, arg, item_name, vector_index + 1)
+    elif arg.type in BASE_TYPES:
+        builder.write(item_name)
+    else:
+        builder.write(
+            "{0}.to_dict() if isinstance({0}, TLObject) else {0}", item_name
+        )
+    builder.write(" for {0} in {1}]", item_name, name)
 
 
 def _write_to_bytes(tlobject, builder):
@@ -417,7 +439,7 @@ def _write_read_result(tlobject, builder):
     )
 
 
-def _write_arg_to_bytes(builder, arg, tlobject, name=None):
+def _write_arg_to_bytes(builder, arg, tlobject, name=None, vector_index=0):
     """
     Writes the .__bytes__() code for the given argument
     :param builder: The source code builder
@@ -437,7 +459,7 @@ def _write_arg_to_bytes(builder, arg, tlobject, name=None):
     # if it's not a True type.
     # True types are not actually sent, but instead only used to
     # determine the flags.
-    if arg.flag:
+    if arg.flag and vector_index == 0:
         if arg.type == "true":
             return  # Exit, since True type is never written
         elif arg.is_vector:
@@ -451,8 +473,12 @@ def _write_arg_to_bytes(builder, arg, tlobject, name=None):
         else:
             builder.write("b'' if {0} is None or {0} is False " "else (", name)
 
-    if arg.is_vector:
-        if arg.use_vector_id:
+    if vector_index < len(arg.vector_types):
+        nested = vector_index > 0
+        if nested:
+            builder.write("b''.join((")
+
+        if arg.vector_types[vector_index] == "Vector":
             # vector code, unsigned 0x1cb5c415 as little endian
             builder.write(r"b'\x15\xc4\xb5\x1c',")
 
@@ -462,15 +488,18 @@ def _write_arg_to_bytes(builder, arg, tlobject, name=None):
         # since that's a Python >3.5 feature, so add another join.
         builder.write("b''.join(")
 
-        # Temporary disable .is_vector, not to enter this if again
-        # Also disable .flag since it's not needed per element
-        old_flag, arg.flag = arg.flag, None
-        arg.is_vector = False
-        _write_arg_to_bytes(builder, arg, tlobject, name="x")
-        arg.is_vector = True
-        arg.flag = old_flag
+        item_name = "x" if vector_index == 0 else "x{}".format(vector_index)
+        _write_arg_to_bytes(
+            builder,
+            arg,
+            tlobject,
+            name=item_name,
+            vector_index=vector_index + 1,
+        )
 
-        builder.write(" for x in {})", name)
+        builder.write(" for {0} in {1})", item_name, name)
+        if nested:
+            builder.write("))")
 
     elif arg.flag_indicator:
         # Calculate the flags with those items which are not None
@@ -540,7 +569,7 @@ def _write_arg_to_bytes(builder, arg, tlobject, name=None):
         if not boxed:
             builder.write("[4:]")
 
-    if arg.flag:
+    if arg.flag and vector_index == 0:
         builder.write(")")
         if arg.is_vector:
             builder.write(")")  # We were using a tuple
@@ -548,7 +577,7 @@ def _write_arg_to_bytes(builder, arg, tlobject, name=None):
     return True  # Something was written
 
 
-def _write_arg_read_code(builder, arg, tlobject, name):
+def _write_arg_read_code(builder, arg, tlobject, name, vector_index=0):
     """
     Writes the read code for the given argument, setting the
     arg.name variable to its read value.
@@ -565,8 +594,8 @@ def _write_arg_read_code(builder, arg, tlobject, name):
         return  # Do nothing, this only specifies a later type
 
     # The argument may be a flag, only write that flag was given!
-    old_flag = None
-    if arg.flag:
+    flag = arg.flag if vector_index == 0 else None
+    if flag:
         # Treat 'true' flags as a special case, since they're true if
         # they're set, and nothing else needs to actually be read.
         if "true" == arg.type:
@@ -576,20 +605,22 @@ def _write_arg_read_code(builder, arg, tlobject, name):
         builder.writeln("if {} & {}:", arg.flag, 1 << arg.flag_index)
         # Temporary disable .flag not to enter this if
         # again when calling the method recursively
-        old_flag, arg.flag = arg.flag, None
-
-    if arg.is_vector:
-        if arg.use_vector_id:
+    if vector_index < len(arg.vector_types):
+        if arg.vector_types[vector_index] == "Vector":
             # We have to read the vector's constructor ID
             builder.writeln("reader.read_int()")
 
         builder.writeln("{} = []", name)
         builder.writeln("for _ in range(reader.read_int()):")
-        # Temporary disable .is_vector, not to enter this if again
-        arg.is_vector = False
-        _write_arg_read_code(builder, arg, tlobject, name="_x")
-        builder.writeln("{}.append(_x)", name)
-        arg.is_vector = True
+        item_name = "_x" if vector_index == 0 else "_x{}".format(vector_index)
+        _write_arg_read_code(
+            builder,
+            arg,
+            tlobject,
+            name=item_name,
+            vector_index=vector_index + 1,
+        )
+        builder.writeln("{0}.append({1})", name, item_name)
 
     elif arg.flag_indicator:
         # Read the flags, which will indicate what items we should read next
@@ -657,16 +688,14 @@ def _write_arg_read_code(builder, arg, tlobject, name):
             builder.writeln("{} = {}.from_reader(reader)", name, class_name)
 
     # End vector and flag blocks if required (if we opened them before)
-    if arg.is_vector:
+    if vector_index < len(arg.vector_types):
         builder.end_block()
 
-    if old_flag:
+    if flag:
         builder.current_indent -= 1
         builder.writeln("else:")
         builder.writeln("{} = None", name)
         builder.current_indent -= 1
-        # Restore .flag
-        arg.flag = old_flag
 
 
 def _write_all_tlobjects(tlobjects, layer, builder):

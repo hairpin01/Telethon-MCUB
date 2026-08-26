@@ -698,11 +698,19 @@ class MessageMethods:
         raise ValueError("Either html, markdown or rich_message must be provided")
 
     @staticmethod
-    def _default_rich_fallback(html: str = None, markdown: str = None, message: str = ""):
+    def _default_rich_fallback(html: str = None, markdown: str = None, message: str = "", rich_message=None):
         if html is not None:
             return html, "html"
         if markdown is not None:
             return markdown, ()
+        if isinstance(rich_message, types.InputRichMessageHTML):
+            return rich_message.html, "html"
+        if isinstance(rich_message, types.InputRichMessageMarkdown):
+            return rich_message.markdown, ()
+        if message:
+            return message, ()
+        if rich_message is not None:
+            return richparser.rich_message_to_text(rich_message), ()
         return message, ()
 
     async def send_rich_message(
@@ -776,6 +784,7 @@ class MessageMethods:
                     html,
                     markdown,
                     message,
+                    rich_message,
                 )
                 if fallback_parse_mode is None:
                     fallback_parse_mode = default_parse_mode
@@ -1672,6 +1681,7 @@ class MessageMethods:
                         html,
                         markdown,
                         text,
+                        input_rich_message,
                     )
                     if fallback_parse_mode is None:
                         fallback_parse_mode = default_parse_mode
@@ -1708,6 +1718,7 @@ class MessageMethods:
                     html,
                     markdown,
                     text,
+                    input_rich_message,
                 )
                 if fallback_parse_mode is None:
                     fallback_parse_mode = default_parse_mode

@@ -25,11 +25,13 @@ aliases are accepted directly by this parser where practical.
 """
 from __future__ import annotations
 
-import re
+import base64
+import binascii
 from dataclasses import dataclass, field
 from html import escape
+from urllib.parse import urlsplit
 from html.parser import HTMLParser
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 from ..tl import types
 
@@ -270,6 +272,46 @@ Inline = Union[
     TextMathInline, TextAnchorLink, TextReference,
 ]
 
+
+_MAX_NESTING = 100
+_INT32_MIN, _INT32_MAX = -(2 ** 31), 2 ** 31 - 1
+_INT64_MIN, _INT64_MAX = -(2 ** 63), 2 ** 63 - 1
+
+
+def _inline_plain(items: object) -> str:
+    """Return visible text from parser inline nodes without dropping nesting."""
+    result = []
+    stack = list(reversed(items or []))
+    while stack:
+        item = stack.pop()
+        if isinstance(item, TextPlain):
+            result.append(item.text)
+        elif isinstance(item, TextCode):
+            result.append(item.text)
+        elif isinstance(item, TextMathInline):
+            result.append(item.formula)
+        elif isinstance(item, TextEmoji):
+            result.append(item.alt)
+        elif isinstance(item, TextDateTime):
+            result.append(item.text)
+        elif hasattr(item, "items"):
+            stack.extend(reversed(item.items))
+    return "".join(result)
+
+
+def _bounded_int(value: object, minimum: int, maximum: int) -> Optional[int]:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if minimum <= number <= maximum else None
+
+
+def _safe_href(value: object) -> Optional[str]:
+    href = str(value or "")
+    scheme = urlsplit(href).scheme.lower()
+    return href if not scheme or scheme in {"http", "https", "tg", "mailto", "tel"} else None
+
 @dataclass
 class Caption:
     content: List[Inline] = field(default_factory=list)
@@ -364,24 +406,35 @@ class BlockAnchor:
 @dataclass
 class ListItem:
     content: List[Inline] = field(default_factory=list)
+    blocks: List["Block"] = field(default_factory=list)
     checkbox: Optional[bool] = None   # None = no checkbox; True/False = checked state.
     value: Optional[int] = None       # <li value="N">
+    num: Optional[str] = None         # Compatibility metadata for ordered TL items.
+    type: Optional[str] = None
 
     def to_html(self) -> str:
         val_attr = f' value="{self.value}"' if self.value is not None else ""
+        num_attr = f' data-num="{escape(self.num, quote=True)}"' if self.num is not None else ""
         prefix = ""
         if self.checkbox is not None:
             checked = " checked" if self.checkbox else ""
             prefix = f'<input type="checkbox"{checked}>'
-        return f"<li{val_attr}>{prefix}{_ih(self.content)}</li>"
+        type_attr = f' type="{escape(self.type, quote=True)}"' if self.type else ""
+        return f"<li{val_attr}{num_attr}{type_attr}>{prefix}{_ih(self.content)}{''.join(block.to_html() for block in self.blocks)}</li>"
 
     def to_tl(self) -> dict:
         d: dict = {"_": "InputRichBlockListItem", "text": _it(self.content)}
+        if self.blocks:
+            d["blocks"] = [block.to_tl() for block in self.blocks]
         if self.checkbox is not None:
             d["checkbox"] = True
             d["checked"] = self.checkbox
         if self.value is not None:
-            d["num"] = self.value
+            d["value"] = self.value
+        if self.num is not None:
+            d["num"] = self.num
+        if self.type:
+            d["type"] = self.type
         return d
 
 
@@ -392,6 +445,7 @@ class BlockList:
     items: List[ListItem] = field(default_factory=list)
     start: Optional[int] = None
     reversed_: bool = False
+    type: Optional[str] = None
 
     def to_html(self) -> str:
         tag = "ol" if self.ordered else "ul"
@@ -400,6 +454,8 @@ class BlockList:
             attrs += f' start="{self.start}"'
         if self.reversed_:
             attrs += " reversed"
+        if self.type:
+            attrs += f' type="{escape(self.type, quote=True)}"'
         return f"<{tag}{attrs}>{''.join(i.to_html() for i in self.items)}</{tag}>"
 
     def to_tl(self) -> dict:
@@ -409,6 +465,8 @@ class BlockList:
             d["start"] = self.start
         if self.reversed_:
             d["reversed"] = True
+        if self.type:
+            d["type"] = self.type
         return d
 
 
@@ -514,6 +572,7 @@ class BlockSlideshow:
 class TableCell:
     content: List[Inline] = field(default_factory=list)
     align: Optional[str] = None
+    valign: Optional[str] = None
     is_header: bool = False
     colspan: Optional[int] = None
     rowspan: Optional[int] = None
@@ -523,6 +582,8 @@ class TableCell:
         a = ""
         if self.align:
             a += f' align="{escape(self.align, quote=True)}"'
+        if self.valign:
+            a += f' valign="{escape(self.valign, quote=True)}"'
         if self.colspan and self.colspan > 1:
             a += f' colspan="{self.colspan}"'
         if self.rowspan and self.rowspan > 1:
@@ -534,6 +595,8 @@ class TableCell:
                    "header": self.is_header}
         if self.align:
             d["align"] = self.align
+        if self.valign:
+            d["valign"] = self.valign
         if self.colspan:
             d["colspan"] = self.colspan
         if self.rowspan:
@@ -559,6 +622,7 @@ class BlockTable:
     title: Optional[str] = None
     bordered: Optional[bool] = None
     striped: Optional[bool] = None
+    compact: Optional[bool] = None
 
     def to_html(self) -> str:
         a = ""
@@ -566,6 +630,8 @@ class BlockTable:
             a += " bordered"
         if self.striped:
             a += " striped"
+        if self.compact:
+            a += " compact"
         inner = ""
         if self.title:
             inner += f"<caption>{escape(self.title)}</caption>"
@@ -581,6 +647,8 @@ class BlockTable:
             d["bordered"] = self.bordered
         if self.striped is not None:
             d["striped"] = self.striped
+        if self.compact is not None:
+            d["compact"] = self.compact
         return d
 
 
@@ -745,12 +813,70 @@ class BlockThinking:
         return {"_": "InputRichBlockThinking", "text": self.content}
 
 
+def _button_attr_names(button_type: str) -> set[str]:
+    common = {"type", "style"}
+    by_type = {
+        "url": {"url"}, "web_app": {"url"},
+        "callback_data": {"data", "data-base64", "requires-password"},
+        "login_url": {"url", "forward-text", "fwd-text", "button-id", "request-write-access"},
+        "switch_inline_query": {"query"},
+        "switch_inline_query_current_chat": {"query"},
+        "switch_inline_query_chosen_chat": {
+            "query", "allow-user-chats", "allow-bot-chats", "allow-group-chats", "allow-channel-chats",
+        },
+        "copy_text": {"text", "copy-text"}, "user_profile": {"user-id"},
+    }
+    return common | by_type.get(button_type, set())
+
+
+@dataclass
+class Button:
+    content: List[Inline] = field(default_factory=list)
+    type: str = "url"
+    attrs: Dict[str, str] = field(default_factory=dict)
+    style: Optional[str] = None
+
+    def to_html(self) -> str:
+        attrs = [f'type="{escape(self.type, quote=True)}"']
+        if self.style:
+            attrs.append(f'style="{escape(self.style, quote=True)}"')
+        allowed = _button_attr_names(self.type)
+        attrs.extend(
+            f'{name}="{escape(value, quote=True)}"'
+            for name, value in self.attrs.items() if name in allowed
+        )
+        return f"<tg-button {' '.join(attrs)}>{_ih(self.content)}</tg-button>"
+
+
+@dataclass
+class BlockButtonRow:
+    buttons: List[Button] = field(default_factory=list)
+    align: Optional[str] = None
+
+    def to_html(self) -> str:
+        align = f' align="{escape(self.align, quote=True)}"' if self.align in {"left", "center", "right"} else ""
+        return f"<tg-button-row{align}>{''.join(button.to_html() for button in self.buttons)}</tg-button-row>"
+
+    def to_tl(self) -> dict:
+        return {
+            "_": "InputRichBlockButtonRow",
+            "buttons": [
+                {
+                    "text": _it(button.content), "type": button.type,
+                    "attrs": button.attrs, "style": button.style,
+                }
+                for button in self.buttons
+            ],
+            "align": self.align,
+        }
+
+
 Block = Union[
     BlockParagraph, BlockHeading, BlockPreformatted, BlockFooter,
     BlockDivider, BlockMath, BlockAnchor, BlockList, BlockQuotation,
     BlockPullQuotation, BlockCollage, BlockSlideshow, BlockTable,
     BlockDetails, BlockMap, BlockPhoto, BlockVideo, BlockAudio,
-    BlockAnimation, BlockVoiceNote, BlockThinking,
+    BlockAnimation, BlockVoiceNote, BlockThinking, BlockButtonRow,
 ]
 
 # Tags that open a block context and accept inline content.
@@ -816,7 +942,8 @@ class RichHTMLParser(HTMLParser):
         self._stack: List[_Frame] = []
 
     def _push(self, frame: _Frame) -> None:
-        self._stack.append(frame)
+        if len(self._stack) < _MAX_NESTING:
+            self._stack.append(frame)
 
     def _pop(self) -> Optional[_Frame]:
         return self._stack.pop() if self._stack else None
@@ -829,10 +956,10 @@ class RichHTMLParser(HTMLParser):
         for frame in reversed(self._stack):
             if frame.kind in (
                 "paragraph", "h1", "h2", "h3", "h4", "h5", "h6",
-                "footer", "blockquote", "aside", "li",
-                "figcaption", "caption_credit",
+                "footer", "blockquote", "aside", "details", "li",
+                "figcaption", "caption_credit", "table_caption",
                 "td", "th", "summary", "thinking",
-                "pre", "math_inline", "math_block",
+                "pre", "math_inline", "math_block", "inline_code", "button",
                 "tg_emoji", "tg_time",
                 # Inline frames accept text too.
                 "inline",
@@ -844,12 +971,28 @@ class RichHTMLParser(HTMLParser):
         """Append a completed block to the top level or parent frame."""
         top = self._top()
         if top and top.kind == "details":
+            self._flush_parent_inline(top)
             top.extra.setdefault("blocks", []).append(block)
             return
+        if top and top.kind == "li":
+            self._flush_parent_inline(top)
+            top.extra.setdefault("blocks", []).append(block)
+            return
+        if top and top.kind in ("blockquote", "aside", "td", "th"):
+            # These TL shapes hold RichText rather than child PageBlocks.
+            if isinstance(block, BlockParagraph):
+                top.items.extend(block.content)
+                return
         if top and top.kind in ("collage", "slideshow"):
             # Collage/slideshow media items are added via _handle_media_void.
             pass
         self.blocks.append(block)
+
+    @staticmethod
+    def _flush_parent_inline(frame: _Frame) -> None:
+        if frame.items:
+            frame.extra.setdefault("blocks", []).append(BlockParagraph(frame.items))
+            frame.items = []
 
     def _flush_figure(self, frame: _Frame) -> Optional[Block]:
         """Build a media block from a <figure> frame."""
@@ -937,6 +1080,26 @@ class RichHTMLParser(HTMLParser):
             self._push(_Frame("thinking", "tg-thinking", ad))
             return
 
+        if tag == "tg-button-row":
+            align = ad.get("align", "").lower()
+            self._push(_Frame("button_row", tag, ad, {
+                "align": align if align in ("left", "center", "right") else None,
+                "buttons": [],
+            }))
+            return
+
+        if tag == "tg-button":
+            row = self._top()
+            if row and row.kind == "button_row":
+                button_type = ad.get("type", "url").lower()
+                self._push(_Frame("button", tag, ad, {
+                    "type": button_type,
+                    "attrs": {name: value for name, value in ad.items()
+                              if name in _button_attr_names(button_type)},
+                    "style": ad.get("style"),
+                }))
+            return
+
         if tag == "figure":
             self._push(_Frame("figure", "figure", ad, {
                 "media_tag": None, "src": "", "spoiler": None,
@@ -974,27 +1137,31 @@ class RichHTMLParser(HTMLParser):
 
         if tag in ("ul", "ol"):
             ordered = tag == "ol"
-            start = _int_attr(ad.get("start"))
+            start = _bounded_int(ad.get("start"), _INT32_MIN, _INT32_MAX)
             rev = "reversed" in ad
             self._push(_Frame("list", tag, ad, {
-                "ordered": ordered, "start": start, "reversed": rev, "items": [],
+                "ordered": ordered, "start": start, "reversed": rev,
+                "type": ad.get("type"), "items": [],
             }))
             return
 
         if tag == "li":
             top = self._top()
-            value = _int_attr(ad.get("value"))
+            value = _bounded_int(ad.get("value"), _INT32_MIN, _INT32_MAX)
             self._push(_Frame("li", "li", ad, {
-                "value": value, "checkbox": None,
+                "value": value, "type": ad.get("type"), "checkbox": None, "blocks": [],
+                "num": ad.get("data-num", ad.get("num")),
             }))
             return
 
         if tag == "table":
             bordered = "bordered" in ad or _truthy(ad.get("bordered")) is True
             striped = "striped" in ad or _truthy(ad.get("striped")) is True
+            compact = "compact" in ad or _truthy(ad.get("compact")) is True
             self._push(_Frame("table", "table", ad, {
                 "title": None, "bordered": bordered if bordered else None,
-                "striped": striped if striped else None, "rows": [],
+                "striped": striped if striped else None,
+                "compact": compact if compact else None, "rows": [],
             }))
             return
 
@@ -1010,10 +1177,11 @@ class RichHTMLParser(HTMLParser):
 
         if tag in ("td", "th"):
             align = ad.get("align")
-            colspan = _int_attr(ad.get("colspan"))
-            rowspan = _int_attr(ad.get("rowspan"))
+            valign = ad.get("valign")
+            colspan = _bounded_int(ad.get("colspan"), _INT32_MIN, _INT32_MAX)
+            rowspan = _bounded_int(ad.get("rowspan"), _INT32_MIN, _INT32_MAX)
             self._push(_Frame(tag, tag, ad, {
-                "align": align, "colspan": colspan, "rowspan": rowspan,
+                "align": align, "valign": valign, "colspan": colspan, "rowspan": rowspan,
                 "is_header": tag == "th",
             }))
             return
@@ -1056,6 +1224,10 @@ class RichHTMLParser(HTMLParser):
                 else:
                     self._push(_Frame("inline", "a", ad, {"wrap": None}))
                 return
+            href = _safe_href(href)
+            if href is None:
+                self._push(_Frame("inline", "a", ad, {"wrap": None}))
+                return
             if href.startswith("#"):
                 self._push(_Frame("inline", "a", ad, {
                     "wrap": TextAnchorLink, "href": href[1:],
@@ -1085,7 +1257,7 @@ class RichHTMLParser(HTMLParser):
 
         if tag == "tg-emoji":
             eid = ad.get("emoji-id", "")
-            if eid:
+            if _bounded_int(eid, _INT64_MIN, _INT64_MAX) is not None:
                 # tg-emoji contains alt text, so open a frame.
                 self._push(_Frame("tg_emoji", "tg-emoji", ad, {"emoji_id": eid}))
             return
@@ -1182,27 +1354,36 @@ class RichHTMLParser(HTMLParser):
             return
 
         if kind == "inline_code":
-            text = "".join(
-                i.text if isinstance(i, TextPlain) else "" for i in frame.items
-            )
+            text = _inline_plain(frame.items)
             target = self._inline_target()
             if target:
                 target.items.append(TextCode(text))
             return
 
+        if kind == "button":
+            row = self._top()
+            if row and row.kind == "button_row":
+                attrs = dict(frame.extra["attrs"])
+                attrs.pop("type", None)
+                attrs.pop("style", None)
+                row.extra["buttons"].append(Button(
+                    frame.items, frame.extra["type"], attrs, frame.extra["style"]
+                ))
+            return
+
+        if kind == "button_row":
+            self._emit(BlockButtonRow(frame.extra["buttons"], frame.extra["align"]))
+            return
+
         if kind == "tg_emoji":
-            text = "".join(
-                i.text if isinstance(i, TextPlain) else " " for i in frame.items
-            ) or " "
+            text = _inline_plain(frame.items) or " "
             target = self._inline_target()
             if target:
                 target.items.append(TextEmoji(frame.extra["emoji_id"], text))
             return
 
         if kind == "tg_time":
-            text = "".join(
-                i.text if isinstance(i, TextPlain) else "" for i in frame.items
-            )
+            text = _inline_plain(frame.items)
             target = self._inline_target()
             if target:
                 target.items.append(TextDateTime(
@@ -1211,9 +1392,7 @@ class RichHTMLParser(HTMLParser):
             return
 
         if kind == "math_inline":
-            text = "".join(
-                i.text if isinstance(i, TextPlain) else "" for i in frame.items
-            )
+            text = _inline_plain(frame.items)
             target = self._inline_target()
             if target:
                 target.items.append(TextMathInline(text))
@@ -1256,44 +1435,35 @@ class RichHTMLParser(HTMLParser):
             return
 
         if kind == "pre":
-            text = "".join(
-                i.text if isinstance(i, TextPlain) else "" for i in frame.items
-            )
+            text = _inline_plain(frame.items)
             lang = frame.extra.get("language")
             self._emit(BlockPreformatted(text, lang))
             return
 
         if kind == "math_block":
-            text = "".join(
-                i.text if isinstance(i, TextPlain) else "" for i in frame.items
-            )
+            text = _inline_plain(frame.items)
             self._emit(BlockMath(text))
             return
 
         if kind == "thinking":
-            text = "".join(
-                i.text if isinstance(i, TextPlain) else "" for i in frame.items
-            )
+            text = _inline_plain(frame.items)
             self._emit(BlockThinking(text))
             return
 
         if kind == "anchor_block":
-            text = "".join(
-                i.text if isinstance(i, TextPlain) else "" for i in frame.items
-            )
+            text = _inline_plain(frame.items)
             self._emit(BlockAnchor(frame.extra["name"], text))
             return
 
         if kind == "summary":
-            title_text = "".join(
-                i.text if isinstance(i, TextPlain) else "" for i in frame.items
-            )
+            title_text = _inline_plain(frame.items)
             parent = self._top()
             if parent and parent.kind == "details":
                 parent.extra["title"] = title_text
             return
 
         if kind == "details":
+            self._flush_parent_inline(frame)
             title = frame.extra.get("title", "")
             open_ = frame.extra.get("open", None)
             self._emit(BlockDetails(title or "", frame.extra.get("blocks", []), open_ or None))
@@ -1319,9 +1489,7 @@ class RichHTMLParser(HTMLParser):
             return
 
         if kind == "table_caption":
-            title_text = "".join(
-                i.text if isinstance(i, TextPlain) else "" for i in frame.items
-            )
+            title_text = _inline_plain(frame.items)
             parent = self._top()
             if parent and parent.kind == "table":
                 parent.extra["title"] = title_text
@@ -1331,6 +1499,7 @@ class RichHTMLParser(HTMLParser):
             cell = TableCell(
                 content=frame.items,
                 align=frame.extra.get("align"),
+                valign=frame.extra.get("valign"),
                 is_header=frame.extra.get("is_header", False),
                 colspan=frame.extra.get("colspan"),
                 rowspan=frame.extra.get("rowspan"),
@@ -1353,14 +1522,20 @@ class RichHTMLParser(HTMLParser):
                 title=frame.extra.get("title"),
                 bordered=frame.extra.get("bordered"),
                 striped=frame.extra.get("striped"),
+                compact=frame.extra.get("compact"),
             ))
             return
 
         if kind == "li":
+            if frame.extra.get("blocks"):
+                self._flush_parent_inline(frame)
             item = ListItem(
                 content=frame.items,
+                blocks=frame.extra.get("blocks", []),
                 checkbox=frame.extra.get("checkbox"),
                 value=frame.extra.get("value"),
+                num=frame.extra.get("num"),
+                type=frame.extra.get("type"),
             )
             parent = self._top()
             if parent and parent.kind == "list":
@@ -1373,6 +1548,7 @@ class RichHTMLParser(HTMLParser):
                 items=frame.extra.get("items", []),
                 start=frame.extra.get("start"),
                 reversed_=frame.extra.get("reversed", False),
+                type=frame.extra.get("type"),
             ))
             return
 
@@ -1465,7 +1641,9 @@ def blocks_to_tl(blocks: List[Block]) -> List[dict]:
 # Fast path: HTML → parser TL dictionaries in one call.
 def html_to_input_blocks(html: str) -> List[dict]:
     """HTML → parser InputRichBlock* dictionaries."""
-    return blocks_to_tl(parse_rich_html(html))
+    blocks = parse_rich_html(html)
+    _validate_rich_blocks(blocks)
+    return blocks_to_tl(blocks)
 
 
 def _tl_text(value: Any):
@@ -1538,6 +1716,16 @@ def _tl_caption(value: Any):
 
 
 def _tl_list_item(value: dict, ordered: bool = False):
+    blocks = value.get("blocks")
+    if blocks:
+        content = _tl_text(value.get("text"))
+        rendered_blocks = [_tl_block(block) for block in blocks]
+        if content.__class__.__name__ != "TextEmpty":
+            rendered_blocks.insert(0, types.PageBlockParagraph(content))
+        return types.PageListItemBlocks(
+            rendered_blocks,
+            checkbox=value.get("checkbox"), checked=value.get("checked"),
+        )
     text = _tl_text(value.get("text"))
     checkbox = value.get("checkbox")
     checked = value.get("checked")
@@ -1571,6 +1759,79 @@ def _tl_table_cell(value: dict):
 
 def _tl_table_row(value: dict):
     return types.PageTableRow([_tl_table_cell(cell) for cell in value.get("cells", [])])
+
+
+def _button_url(attrs: dict) -> str:
+    url = _safe_href(attrs.get("url", ""))
+    if url is None:
+        raise ValueError("button URL must use a safe scheme")
+    return url
+
+
+def _tl_button(value: dict):
+    attrs = value.get("attrs", {})
+    button_type = value.get("type", "url")
+    if button_type == "url":
+        button = types.InlineButtonTypeUrl(_button_url(attrs))
+    elif button_type == "web_app":
+        button = types.InlineButtonTypeWebView(_button_url(attrs))
+    elif button_type == "callback_data":
+        encoded = attrs.get("data-base64")
+        if encoded is not None:
+            try:
+                # Compatibility attribute for callback bytes that are not UTF-8.
+                data = base64.b64decode(encoded, validate=True)
+            except (binascii.Error, ValueError, TypeError):
+                data = attrs.get("data", "").encode("utf-8")
+        else:
+            data = attrs.get("data", "").encode("utf-8")
+        if not 1 <= len(data) <= 64:
+            raise ValueError("callback_data must contain 1 to 64 bytes")
+        button = types.InlineButtonTypeCallback(
+            data, requires_password=_truthy(attrs.get("requires-password"))
+        )
+    elif button_type == "login_url":
+        button = types.InlineButtonTypeUrlAuth(
+            _button_url(attrs), _bounded_int(attrs.get("button-id"), _INT32_MIN, _INT32_MAX) or 0,
+            attrs.get("forward-text", attrs.get("fwd-text")),
+        )
+    elif button_type in ("switch_inline_query", "switch_inline_query_current_chat"):
+        button = types.InlineButtonTypeSwitchInline(
+            attrs.get("query", ""), same_peer=button_type.endswith("current_chat")
+        )
+    elif button_type == "switch_inline_query_chosen_chat":
+        peer_types = []
+        for attr, peer_type in (
+            ("allow-user-chats", types.InlineQueryPeerTypePM),
+            ("allow-bot-chats", types.InlineQueryPeerTypeBotPM),
+            ("allow-group-chats", types.InlineQueryPeerTypeChat),
+            ("allow-channel-chats", types.InlineQueryPeerTypeBroadcast),
+        ):
+            if _truthy(attrs.get(attr)):
+                peer_types.append(peer_type())
+        button = types.InlineButtonTypeSwitchInline(attrs.get("query", ""), peer_types=peer_types)
+    elif button_type == "copy_text":
+        button = types.InlineButtonTypeCopy(attrs.get("text", attrs.get("copy-text", "")))
+    elif button_type == "disabled":
+        button = types.InlineButtonTypeDisabled()
+    elif button_type == "game":
+        button = types.InlineButtonTypeGame()
+    elif button_type == "buy":
+        button = types.InlineButtonTypeBuy()
+    elif button_type == "user_profile":
+        button = types.InlineButtonTypeUserProfile(
+            _bounded_int(attrs.get("user-id"), _INT64_MIN, _INT64_MAX) or 0
+        )
+    else:
+        button = types.InlineButtonTypeUrl(attrs.get("url", ""))
+
+    style_name = value.get("style")
+    styles = {
+        "primary": {"bg_primary": True}, "danger": {"bg_danger": True},
+        "success": {"bg_success": True}, "link": {"link": True},
+    }
+    style = types.RichButtonStyle(**styles[style_name]) if style_name in styles else None
+    return types.PageButton(_tl_text(value.get("text")), button, style)
 
 
 def _tl_block(value: Any):
@@ -1629,6 +1890,15 @@ def _tl_block(value: Any):
             [_tl_table_row(row) for row in value.get("rows", [])],
             bordered=value.get("bordered"),
             striped=value.get("striped"),
+            compact=value.get("compact"),
+        )
+    if kind == "InputRichBlockButtonRow":
+        align = value.get("align")
+        return types.PageBlockButtonRow(
+            [_tl_button(button) for button in value.get("buttons", [])],
+            align_left=True if align == "left" else None,
+            align_center=True if align == "center" else None,
+            align_right=True if align == "right" else None,
         )
     if kind == "InputRichBlockThinking":
         return types.PageBlockThinking(_tl_text(value.get("text")))
@@ -1639,7 +1909,50 @@ def _tl_block(value: Any):
 
 def html_to_tl_blocks(html: str):
     """Parse Rich HTML into real Telethon PageBlock TL objects."""
-    return [_tl_block(block) for block in html_to_input_blocks(html)]
+    blocks = parse_rich_html(html)
+    _validate_rich_blocks(blocks)
+    return [_tl_block(block) for block in blocks_to_tl(blocks)]
+
+
+def _validate_rich_blocks(blocks: list[Block]) -> None:
+    """Validate nested Rich blocks without recursing through rich-text metadata."""
+    pending = [(block, 0) for block in reversed(blocks)]
+    seen = set()
+    count = 0
+    while pending:
+        block, depth = pending.pop()
+        if id(block) in seen:
+            raise ValueError("rich message block graph contains a cycle")
+        seen.add(id(block))
+        if depth > _MAX_NESTING:
+            raise ValueError("rich message block nesting exceeds 100 levels")
+        count += 1
+        if count > 100:
+            raise ValueError("rich message cannot contain more than 100 blocks")
+
+        name = block.__class__.__name__
+        if isinstance(block, BlockButtonRow) or name == "PageBlockButtonRow":
+            if not 1 <= len(getattr(block, "buttons", ()) or ()) <= 8:
+                raise ValueError("tg-button-row must contain 1 to 8 buttons")
+
+        children = []
+        if isinstance(block, BlockDetails) or name == "PageBlockDetails":
+            children.extend(getattr(block, "blocks", ()) or ())
+        elif isinstance(block, BlockList) or name in {"PageBlockList", "PageBlockOrderedList"}:
+            for item in getattr(block, "items", ()) or ():
+                children.extend(getattr(item, "blocks", ()) or ())
+        elif isinstance(block, (BlockCollage, BlockSlideshow)) or name in {"PageBlockCollage", "PageBlockSlideshow"}:
+            children.extend(getattr(block, "items", ()) or ())
+        elif name == "PageBlockCover":
+            cover = getattr(block, "cover", None)
+            if cover is not None:
+                children.append(cover)
+        pending.extend((child, depth + 1) for child in reversed(children))
+
+
+def validate_rich_message(rich_message: object) -> None:
+    """Validate prebuilt InputRichMessage/RichMessage block limits."""
+    _validate_rich_blocks(list(getattr(rich_message, "blocks", ()) or ()))
 
 
 def html_to_input_rich_message(
@@ -1692,12 +2005,14 @@ def _render_text_content(node: object) -> str:
     return ""
 
 
-def _render_text_link(href: object, text: object) -> str:
-    return '<a href="{}">{}</a>'.format(_escape_html(href), _render_text_node(text))
+def _render_text_link(href: object, text: object, depth: int = 0) -> str:
+    visible = _render_text_node(text, depth + 1)
+    safe_href = _safe_href(href)
+    return '<a href="{}">{}</a>'.format(_escape_html(safe_href), visible) if safe_href else visible
 
 
-def _render_text_node(node: object) -> str:
-    if node is None:
+def _render_text_node(node: object, depth: int = 0) -> str:
+    if node is None or depth >= _MAX_NESTING:
         return ""
 
     try:
@@ -1709,7 +2024,7 @@ def _render_text_node(node: object) -> str:
             return _escape_html(getattr(node, "text", ""))
         if node_type == "TextConcat":
             texts = getattr(node, "texts", None) or ()
-            return "".join(_render_text_node(child) for child in texts)
+            return "".join(_render_text_node(child, depth + 1) for child in texts)
 
         tag_by_type = {
             "TextBold": ("b", "b"),
@@ -1719,12 +2034,12 @@ def _render_text_node(node: object) -> str:
             "TextFixed": ("code", "code"),
             "TextSubscript": ("sub", "sub"),
             "TextSuperscript": ("sup", "sup"),
-            "TextMarked": ("tg-spoiler", "tg-spoiler"),
+            "TextMarked": ("mark", "mark"),
             "TextSpoiler": ("tg-spoiler", "tg-spoiler"),
         }
         if node_type in tag_by_type:
             start_tag, end_tag = tag_by_type[node_type]
-            return f"<{start_tag}>{_render_text_node(getattr(node, 'text', None))}</{end_tag}>"
+            return f"<{start_tag}>{_render_text_node(getattr(node, 'text', None), depth + 1)}</{end_tag}>"
 
         passthrough_types = {
             "TextBankCard",
@@ -1736,25 +2051,25 @@ def _render_text_node(node: object) -> str:
             "TextWithEntities",
         }
         if node_type in passthrough_types:
-            return _render_text_node(getattr(node, "text", None))
+            return _render_text_node(getattr(node, "text", None), depth + 1)
 
         if node_type == "TextMath":
-            return '<code class="math">{}</code>'.format(_escape_html(getattr(node, "source", "")))
+            return '<tg-math>{}</tg-math>'.format(_escape_html(getattr(node, "source", "")))
         if node_type == "TextCustomEmoji":
             document_id = _escape_html(getattr(node, "document_id", ""))
             alt = _escape_html(getattr(node, "alt", ""))
             return '<tg-emoji emoji-id="{}">{}</tg-emoji>'.format(document_id, alt)
         if node_type == "TextUrl":
-            return _render_text_link(getattr(node, "url", ""), getattr(node, "text", None))
+            return _render_text_link(getattr(node, "url", ""), getattr(node, "text", None), depth)
         if node_type == "TextEmail":
             return _render_text_link(
                 "mailto:{}".format(getattr(node, "email", "")),
-                getattr(node, "text", None),
+                getattr(node, "text", None), depth,
             )
         if node_type == "TextPhone":
             return _render_text_link(
                 "tel:{}".format(getattr(node, "phone", "")),
-                getattr(node, "text", None),
+                getattr(node, "text", None), depth,
             )
         if node_type == "TextAutoUrl":
             text = getattr(node, "text", None)
@@ -1796,7 +2111,7 @@ def _render_code_block(text: object, language: object = "", class_name: object =
     else:
         code_class = ""
     class_attr = ' class="{}"'.format(_escape_html(code_class)) if code_class else ""
-    return "<pre><code{}>{}</code></pre>\n".format(class_attr, _render_code_content(text))
+    return "<pre><code{}>{}</code></pre>".format(class_attr, _render_code_content(text))
 
 
 def _render_blocks(blocks: object, separator: str = "") -> str:
@@ -1851,30 +2166,44 @@ def _render_media_block(block: object, label: str, id_attr: str = None, scheme: 
 
 
 def _render_block_link(label: str, url: object) -> str:
-    if not url:
+    safe_url = _safe_href(url)
+    if not safe_url:
         return _escape_html(label)
-    safe_url = _escape_html(url)
-    return '<a href="{}">{}</a>'.format(safe_url, _escape_html(label))
+    return '<a href="{}">{}</a>'.format(_escape_html(safe_url), _escape_html(label))
 
 
 def _render_table(block: object) -> str:
     try:
-        lines = []
+        attrs = ""
+        for name in ("bordered", "striped", "compact"):
+            if getattr(block, name, False):
+                attrs += " " + name
         title = _render_text_node(getattr(block, "title", None))
-        if title:
-            lines.append("<b>{}</b>".format(title))
-
+        rows = []
         for row in getattr(block, "rows", None) or ():
             cells = []
             for cell in getattr(row, "cells", None) or ():
-                content = _render_text_node(getattr(cell, "text", None)).strip()
-                if getattr(cell, "header", False) and content:
-                    content = "<b>{}</b>".format(content)
-                cells.append(content)
+                tag = "th" if getattr(cell, "header", False) else "td"
+                cell_attrs = ""
+                if getattr(cell, "align_center", False):
+                    cell_attrs += ' align="center"'
+                elif getattr(cell, "align_right", False):
+                    cell_attrs += ' align="right"'
+                if getattr(cell, "valign_middle", False):
+                    cell_attrs += ' valign="middle"'
+                elif getattr(cell, "valign_bottom", False):
+                    cell_attrs += ' valign="bottom"'
+                for name in ("colspan", "rowspan"):
+                    value = getattr(cell, name, None)
+                    if value and value > 1:
+                        cell_attrs += f' {name}="{value}"'
+                cells.append("<{}{}>{}</{}>".format(
+                    tag, cell_attrs, _render_text_node(getattr(cell, "text", None)), tag
+                ))
             if cells:
-                lines.append(" | ".join(cells))
-
-        return "\n".join(lines) + ("\n" if lines else "")
+                rows.append("<tr>{}</tr>".format("".join(cells)))
+        caption = f"<caption>{title}</caption>" if title else ""
+        return f"<table{attrs}>{caption}{''.join(rows)}</table>" if rows or caption else ""
     except Exception:
         return ""
 
@@ -1914,23 +2243,20 @@ def _render_list_item(item: object) -> str:
     try:
         prefix = ""
         if getattr(item, "checkbox", False):
-            prefix = "[x] " if getattr(item, "checked", False) else "[ ] "
+            prefix = '<input type="checkbox"{}>'.format(
+                " checked" if getattr(item, "checked", False) else ""
+            )
 
         if item.__class__.__name__.startswith("Text"):
-            return (prefix + _render_text_node(item).strip()).strip()
+            return prefix + _render_text_node(item)
         if isinstance(item, str):
-            return (prefix + _escape_html(item).strip()).strip()
+            return prefix + _escape_html(item)
         if hasattr(item, "text"):
-            return (prefix + _render_text_node(getattr(item, "text", None)).strip()).strip()
+            return prefix + _render_text_node(getattr(item, "text", None))
 
         blocks = getattr(item, "blocks", None)
         if blocks:
-            rendered = " ".join(
-                rendered
-                for rendered in (_render_block(block).strip() for block in blocks)
-                if rendered
-            )
-            return (prefix + rendered).strip()
+            return prefix + "".join(_render_block(block) for block in blocks)
 
         return (prefix + _render_text_node(item).strip()).strip()
     except Exception:
@@ -1947,24 +2273,102 @@ def _render_list(block: object, ordered: bool = False) -> str:
         except (TypeError, ValueError):
             start = 1
 
-        lines = []
+        items_html = []
         for index, item in enumerate(items):
             content = _render_list_item(item)
-            if not content:
-                continue
-
-            if is_ordered:
-                marker = getattr(item, "num", None) or getattr(item, "value", None)
-                marker = str(marker) if marker is not None else "{}.".format(start + index)
-                if marker[-1:] not in (".", ")", ":"):
-                    marker = "{}.".format(marker)
-                lines.append("{} {}".format(_escape_html(marker), content))
-            else:
-                lines.append("• {}".format(content))
-
-        return "\n".join(lines) + ("\n" if lines else "")
+            if content:
+                value = getattr(item, "value", None)
+                value_attr = f' value="{_escape_html(value)}"' if value is not None else ""
+                num = getattr(item, "num", None)
+                num_attr = f' data-num="{_escape_html(num)}"' if num is not None else ""
+                item_type = getattr(item, "type", None)
+                type_attr = f' type="{_escape_html(item_type)}"' if item_type else ""
+                items_html.append(f"<li{value_attr}{num_attr}{type_attr}>{content}</li>")
+        tag = "ol" if is_ordered else "ul"
+        attrs = f' start="{start}"' if is_ordered and start != 1 else ""
+        if is_ordered and getattr(block, "reversed", False):
+            attrs += " reversed"
+        list_type = getattr(block, "type", None)
+        if is_ordered and list_type:
+            attrs += f' type="{_escape_html(list_type)}"'
+        return f"<{tag}{attrs}>{''.join(items_html)}</{tag}>" if items_html else ""
     except Exception:
         return ""
+
+
+def _render_button(button: object) -> str:
+    button_type = getattr(button, "type", None)
+    type_name = button_type.__class__.__name__ if button_type else ""
+    attrs = []
+    mapping = {
+        "InlineButtonTypeUrl": ("url", ("url",)),
+        "InlineButtonTypeWebView": ("web_app", ("url",)),
+        "InlineButtonTypeCopy": ("copy_text", ("copy_text",)),
+        "InlineButtonTypeDisabled": ("disabled", ()),
+        "InlineButtonTypeGame": ("game", ()),
+        "InlineButtonTypeBuy": ("buy", ()),
+        "InlineButtonTypeUserProfile": ("user_profile", ("user_id",)),
+    }
+    if type_name in {"InlineButtonTypeUrl", "InlineButtonTypeWebView", "InlineButtonTypeUrlAuth"}:
+        if _safe_href(getattr(button_type, "url", "")) is None:
+            return '<tg-button type="disabled">{}</tg-button>'.format(
+                _render_text_node(getattr(button, "text", None))
+            )
+    if type_name == "InlineButtonTypeCallback":
+        attrs.append('type="callback_data"')
+        data = getattr(button_type, "data", b"")
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            text = None
+        if text is not None and not any(ord(char) < 32 or ord(char) == 127 for char in text):
+            attrs.append(f'data="{_escape_html(text)}"')
+        else:
+            encoded = base64.b64encode(data).decode("ascii")
+            attrs.append(f'data-base64="{encoded}"')
+        if getattr(button_type, "requires_password", False):
+            attrs.append('requires-password="true"')
+    elif type_name == "InlineButtonTypeUrlAuth":
+        attrs.append('type="login_url"')
+        attrs.append(f'url="{_escape_html(getattr(button_type, "url", ""))}"')
+        attrs.append(f'button-id="{_escape_html(getattr(button_type, "button_id", 0))}"')
+        fwd_text = getattr(button_type, "fwd_text", None)
+        if fwd_text is not None:
+            attrs.append(f'forward-text="{_escape_html(fwd_text)}"')
+    elif type_name == "InlineButtonTypeSwitchInline":
+        same_peer = getattr(button_type, "same_peer", False)
+        peer_types = getattr(button_type, "peer_types", None) or ()
+        if peer_types:
+            attrs.append('type="switch_inline_query_chosen_chat"')
+            peer_attrs = {
+                "InlineQueryPeerTypePM": "allow-user-chats",
+                "InlineQueryPeerTypeBotPM": "allow-bot-chats",
+                "InlineQueryPeerTypeChat": "allow-group-chats",
+                "InlineQueryPeerTypeMegagroup": "allow-group-chats",
+                "InlineQueryPeerTypeBroadcast": "allow-channel-chats",
+            }
+            attrs.extend(peer_attrs[peer.__class__.__name__] for peer in peer_types
+                         if peer.__class__.__name__ in peer_attrs)
+        else:
+            attrs.append('type="switch_inline_query_current_chat"' if same_peer else 'type="switch_inline_query"')
+        attrs.append(f'query="{_escape_html(getattr(button_type, "query", ""))}"')
+    else:
+        name, fields = mapping.get(type_name, ("url", ("url",)))
+        attrs.append(f'type="{name}"')
+        for field_name in fields:
+            attr_name = "text" if type_name == "InlineButtonTypeCopy" else field_name.replace("_", "-")
+            attrs.append(f'{attr_name}="{_escape_html(getattr(button_type, field_name, ""))}"')
+
+    style = getattr(button, "style", None)
+    if style:
+        for name, field_name in (("primary", "bg_primary"), ("danger", "bg_danger"),
+                                 ("success", "bg_success"), ("link", "link")):
+            if getattr(style, field_name, False):
+                attrs.append(f'style="{name}"')
+                break
+    return "<tg-button {}>{}</tg-button>".format(
+        " ".join(attrs), _render_text_node(getattr(button, "text", None))
+    )
 
 
 def _render_block(block: object) -> str:
@@ -1975,9 +2379,9 @@ def _render_block(block: object) -> str:
         block_type = block.__class__.__name__
 
         if block_type == "PageBlockParagraph":
-            return _render_text_node(getattr(block, "text", None)) + "\n"
+            return "<p>{}</p>".format(_render_text_node(getattr(block, "text", None)))
         if block_type == "PageBlockMath":
-            return _render_code_block(getattr(block, "source", ""), class_name="math")
+            return "<tg-math-block>{}</tg-math-block>".format(_escape_html(getattr(block, "source", "")))
         if block_type == "PageBlockCode":
             return _render_code_block(
                 getattr(block, "text", getattr(block, "source", "")),
@@ -1988,18 +2392,10 @@ def _render_block(block: object) -> str:
                 getattr(block, "text", None),
                 getattr(block, "language", ""),
             )
-        bold_blocks = {
-            "PageBlockHeader",
-            "PageBlockHeading1",
-            "PageBlockHeading2",
-            "PageBlockHeading3",
-            "PageBlockHeading4",
-            "PageBlockHeading5",
-            "PageBlockHeading6",
-            "PageBlockSubheader",
-            "PageBlockSubtitle",
-            "PageBlockTitle",
-        }
+        if block_type.startswith("PageBlockHeading") and block_type[-1:] in "123456":
+            level = block_type[-1]
+            return "<h{}>{}</h{}>".format(level, _render_text_node(getattr(block, "text", None)), level)
+        bold_blocks = {"PageBlockHeader", "PageBlockSubheader", "PageBlockSubtitle", "PageBlockTitle"}
         if block_type in bold_blocks:
             return "<b>{}</b>\n".format(_render_text_node(getattr(block, "text", None)))
         italic_blocks = {
@@ -2009,21 +2405,26 @@ def _render_block(block: object) -> str:
         }
         if block_type == "PageBlockAuthorDate":
             return "<i>{}</i>\n".format(_render_text_node(getattr(block, "author", None)))
+        if block_type == "PageBlockFooter":
+            return "<footer>{}</footer>".format(_render_text_node(getattr(block, "text", None)))
         if block_type in italic_blocks:
             return "<i>{}</i>\n".format(_render_text_node(getattr(block, "text", None)))
         if block_type in {"PageBlockBlockquote", "PageBlockPullquote"}:
-            return "<blockquote>{}</blockquote>\n".format(
-                _render_text_node(getattr(block, "text", None))
+            tag = "blockquote" if block_type == "PageBlockBlockquote" else "aside"
+            content = _render_text_node(getattr(block, "text", None))
+            author = _render_text_node(
+                getattr(block, "author", None) or getattr(block, "caption", None)
             )
+            cite = f"<cite>{author}</cite>" if author else ""
+            return f"<{tag}>{content}{cite}</{tag}>"
         if block_type == "PageBlockBlockquoteBlocks":
             content = _render_blocks(getattr(block, "blocks", None)).strip()
             return "<blockquote>{}</blockquote>\n".format(content) if content else ""
         if block_type == "PageBlockDetails":
             title = _render_text_node(getattr(block, "title", None))
-            content = _render_blocks(getattr(block, "blocks", None)).strip()
-            if title and content:
-                return "<b>{}</b>\n{}\n".format(title, content)
-            return (title or content) + ("\n" if title or content else "")
+            content = _render_blocks(getattr(block, "blocks", None))
+            open_attr = " open" if getattr(block, "open", False) else ""
+            return f"<details{open_attr}><summary>{title}</summary>{content}</details>"
         if block_type == "PageBlockCover":
             return _render_block(getattr(block, "cover", None))
         if block_type in {"PageBlockCollage", "PageBlockSlideshow"}:
@@ -2035,9 +2436,21 @@ def _render_block(block: object) -> str:
         if block_type == "PageBlockRelatedArticles":
             return _render_related_articles(block)
         if block_type == "PageBlockThinking":
-            return "<blockquote>{}</blockquote>\n".format(
+            return "<tg-thinking>{}</tg-thinking>".format(
                 _render_text_node(getattr(block, "text", None))
             )
+        if block_type == "PageBlockButtonRow":
+            if getattr(block, "align_center", False):
+                align = "center"
+            elif getattr(block, "align_right", False):
+                align = "right"
+            elif getattr(block, "align_left", False):
+                align = "left"
+            else:
+                align = ""
+            align_attr = f' align="{align}"' if align else ""
+            buttons = "".join(_render_button(button) for button in getattr(block, "buttons", None) or ())
+            return f"<tg-button-row{align_attr}>{buttons}</tg-button-row>"
         if block_type == "PageBlockEmbed":
             label = _render_block_link("[embed]", getattr(block, "url", None))
             return _render_labeled_block(label, getattr(block, "caption", None))
@@ -2056,7 +2469,7 @@ def _render_block(block: object) -> str:
         if block_type == "PageBlockOrderedList":
             return _render_list(block, ordered=True)
         if block_type == "PageBlockDivider":
-            return "\n---\n"
+            return "<hr>"
         media_labels = {
             "PageBlockPhoto": ("[photo]", "photo_id", "photo"),
             "PageBlockVideo": ("[video]", "video_id", "video"),
@@ -2074,12 +2487,79 @@ def _render_block(block: object) -> str:
 
 
 def rich_message_to_html(rich_message: object) -> str:
+    validate_rich_message(rich_message)
     """Convert a RichMessage TL object to an HTML string."""
     try:
         blocks = getattr(rich_message, "blocks", None) or ()
         return "".join(_render_block(block) for block in blocks).rstrip()
     except Exception:
         return ""
+
+
+def rich_message_to_text(rich_message: object) -> str:
+    """Render visible RichMessage content directly, without HTML tag leakage."""
+    def text_node(node: object, depth: int = 0) -> str:
+        if node is None or depth >= _MAX_NESTING:
+            return ""
+        name = node.__class__.__name__
+        if name == "TextPlain":
+            return str(getattr(node, "text", ""))
+        if name == "TextMath":
+            return str(getattr(node, "source", ""))
+        if name == "TextCustomEmoji":
+            return str(getattr(node, "alt", ""))
+        if name == "TextConcat":
+            return "".join(text_node(child, depth + 1) for child in getattr(node, "texts", None) or ())
+        if hasattr(node, "text"):
+            return text_node(getattr(node, "text"), depth + 1)
+        return ""
+
+    def caption_text(caption: object) -> list[str]:
+        if caption is None:
+            return []
+        if caption.__class__.__name__ == "PageCaption":
+            return [text_node(getattr(caption, "text", None)), text_node(getattr(caption, "credit", None))]
+        return [text_node(caption)]
+
+    parts = []
+
+    def append_block(block: object, depth: int = 0) -> None:
+        if block is None or depth >= _MAX_NESTING:
+            return
+        name = block.__class__.__name__
+        if name == "PageBlockMath":
+            parts.append(str(getattr(block, "source", "")))
+        elif name == "PageBlockButtonRow":
+            parts.extend(text_node(getattr(button, "text", None)) for button in getattr(block, "buttons", None) or ())
+        elif name in {"PageBlockList", "PageBlockOrderedList"}:
+            for item in getattr(block, "items", None) or ():
+                if hasattr(item, "text"):
+                    parts.append(text_node(item.text))
+                else:
+                    for child in getattr(item, "blocks", None) or ():
+                        append_block(child, depth + 1)
+        elif name == "PageBlockTable":
+            parts.append(text_node(getattr(block, "title", None)))
+            for row in getattr(block, "rows", None) or ():
+                parts.extend(text_node(getattr(cell, "text", None)) for cell in getattr(row, "cells", None) or ())
+        elif name == "PageBlockDetails":
+            parts.append(text_node(getattr(block, "title", None)))
+            for child in getattr(block, "blocks", None) or ():
+                append_block(child, depth + 1)
+        elif hasattr(block, "text"):
+            parts.append(text_node(getattr(block, "text", None)))
+        parts.extend(caption_text(getattr(block, "caption", None)))
+        if name == "PageBlockCover":
+            cover = getattr(block, "cover", None)
+            if cover is not None:
+                append_block(cover, depth + 1)
+        if name in {"PageBlockCollage", "PageBlockSlideshow"}:
+            for child in getattr(block, "items", None) or ():
+                append_block(child, depth + 1)
+
+    for block in getattr(rich_message, "blocks", None) or ():
+        append_block(block)
+    return "\n".join(part for part in parts if part)
 
 
 def message_to_html(message: object) -> str:
