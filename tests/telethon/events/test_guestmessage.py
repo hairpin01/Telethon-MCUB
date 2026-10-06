@@ -1,19 +1,24 @@
 import pytest
 
+from telethon._updates.entitycache import EntityCache
 from telethon.events.guestmessage import GuestMessage
 from telethon.extensions import richparser
 from telethon.tl import types
 
 
 class MockClient:
+    _self_id = 1
+    _mb_entity_cache = EntityCache()
+
     def __init__(self):
         self.requests = []
         self.sent = []
         self.rich = []
+        self.inline_id = None
 
     async def __call__(self, request):
         self.requests.append(request)
-        return request
+        return self.inline_id if self.inline_id is not None else request
 
     def build_reply_markup(self, buttons):
         return None
@@ -149,6 +154,46 @@ async def test_reply_trims_long_title():
     await event.reply('x' * 200)
 
     assert len(event._client.requests[0].result.title) == 64
+
+
+@pytest.mark.asyncio
+async def test_reply_returns_posted_message():
+    event = make_event(make_query())
+    event._client.inline_id = types.InputBotInlineMessageID64(
+        dc_id=2, owner_id=3, id=77, access_hash=9
+    )
+
+    message = await event.reply('Hi there')
+
+    assert isinstance(message, types.Message)
+    assert message.id == 77
+    assert message.chat_id == event.chat_id
+    assert message.text == 'Hi there'
+    assert message.reply_to.reply_to_msg_id == 11
+    # Kept so `edit`/`edit_rich` know they must use the inline id.
+    assert isinstance(message._inline_msg_id, types.InputBotInlineMessageID64)
+
+
+@pytest.mark.asyncio
+async def test_posted_message_is_edited_through_inline_id():
+    event = make_event(make_query())
+    event._client.inline_id = types.InputBotInlineMessageID64(
+        dc_id=2, owner_id=3, id=77, access_hash=9
+    )
+    event._client.edited = []
+
+    message = await event.rich_reply('<p>body</p>')
+
+    async def edit_rich_message(entity, message_id, *args, **kwargs):
+        event._client.edited.append((entity, message_id, args, kwargs))
+        return 'edited'
+
+    event._client.edit_rich_message = edit_rich_message
+    await message.edit_rich('<p>new body</p>')
+
+    entity, message_id, _, _ = event._client.edited[0]
+    assert entity is message._inline_msg_id
+    assert message_id == 77
 
 
 @pytest.mark.asyncio

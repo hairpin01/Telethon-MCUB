@@ -997,9 +997,36 @@ class Message(ChatGetter, SenderGetter, TLObject):
             kwargs["invert_media"] = bool(self.invert_media)
 
         if self._client:
+            inline_msg_id = getattr(self, "_inline_msg_id", None)
+            if inline_msg_id is not None:
+                # Messages posted through an inline/guest result are edited
+                # through their inline id, not through the chat.
+                if (
+                    kwargs.get("html") is None
+                    and kwargs.get("markdown") is None
+                    and kwargs.get("rich_message") is None
+                ):
+                    text = args[0] if args else kwargs.get("message") or ""
+                    kwargs["html"] = (
+                        await self._client._parse_message_text(
+                            str(text), kwargs.get("parse_mode", "html")
+                        )
+                    )[0]
+                    args = ()
+
+                return await self._client.edit_rich_message(
+                    inline_msg_id, self.id, *args, **kwargs
+                )
+
             return await self._client.edit_rich_message(
                 await self.get_input_chat(), self.id, *args, **kwargs
             )
+
+    async def rich_edit(self, *args, **kwargs):
+        """
+        Alias for `edit_rich`.
+        """
+        return await self.edit_rich(*args, **kwargs)
 
     async def safe_edit(self, *args, default=None, **kwargs):
         """Like `edit`, but ignores ``MessageNotModifiedError``."""

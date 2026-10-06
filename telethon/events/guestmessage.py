@@ -1,3 +1,4 @@
+import datetime
 import inspect
 import re
 
@@ -300,15 +301,19 @@ class GuestMessage(EventBuilder):
                     ``rich_text`` or ``rich_message``.
 
             Returns:
-                The :tl:`InputBotInlineMessageID` of the posted message, or
-                `None` if the query was already answered.
+                The posted `Message <telethon.tl.custom.message.Message>`
+                (which knows its ``_inline_msg_id``, so ``edit`` and
+                ``edit_rich`` work on it), the raw :tl:`InputBotInlineMessageID`
+                if it could not be wrapped, or `None` if the query was
+                already answered.
 
             Example
                 .. code-block:: python
 
                     @bot.on(events.GuestMessage)
                     async def handler(event):
-                        await event.answer(event.builder.photo('photo.jpg'))
+                        message = await event.answer(event.builder.photo('photo.jpg'))
+                        await message.edit('New caption')
             """
             if not self.is_query:
                 raise RuntimeError(
@@ -331,12 +336,42 @@ class GuestMessage(EventBuilder):
                 result = await result
 
             self._answered = True
-            return await self._client(
+            inline_id = await self._client(
                 functions.messages.SetBotGuestChatResultRequest(
                     query_id=self.query_id,
                     result=result,
                 )
             )
+            return self._posted_message(inline_id, result)
+
+        def _posted_message(self, inline_id, result):
+            """
+            Turns the :tl:`InputBotInlineMessageID` returned by
+            `messages.setBotGuestChatResult` into a `Message
+            <telethon.tl.custom.message.Message>`, so the posted message can be
+            edited or deleted right away. Media is not resolved locally (Telegram
+            sends it in a follow-up update), but the message text is.
+            """
+            if not isinstance(
+                inline_id, (types.InputBotInlineMessageID, types.InputBotInlineMessageID64)
+            ):
+                return inline_id
+
+            sent = getattr(result, "send_message", None)
+            message = types.Message(
+                id=inline_id.id,
+                peer_id=self.message.peer_id,
+                date=datetime.datetime.now(),
+                message=getattr(sent, "message", None) or "",
+                entities=getattr(sent, "entities", None) or [],
+                reply_to=types.MessageReplyHeader(reply_to_msg_id=self.message.id),
+                reply_markup=getattr(sent, "reply_markup", None),
+            )
+            # `Message.edit`/`Message.edit_rich` use it to know they must edit
+            # the message through its inline id instead of the chat.
+            message._inline_msg_id = inline_id
+            message._finish_init(self._client, self._entities, self._input_chat)
+            return message
 
         async def reply(self, text="", **kwargs):
             """
@@ -364,12 +399,21 @@ class GuestMessage(EventBuilder):
                 The result title defaults to the text of the message, since
                 Telegram does not accept empty titles for guest results.
 
+            Returns:
+                For queries, the posted `Message
+                <telethon.tl.custom.message.Message>` (so it can be edited or
+                deleted right away), otherwise whatever `client.send_message`
+                returned.
+
             Example
                 .. code-block:: python
 
                     @bot.on(events.GuestMessage)
                     async def handler(event):
-                        await event.reply('Hello!', buttons=Button.url('https://example.com'))
+                        message = await event.reply(
+                            'Hello!', buttons=Button.url('https://example.com')
+                        )
+                        await message.edit('Hello! (edited)')
             """
             if self.is_query:
                 return await self.answer(text=text, **kwargs)
@@ -431,12 +475,23 @@ class GuestMessage(EventBuilder):
                     Convenience mapping/list of media converted into
                     ``files``.
 
+            Returns:
+                For queries, the posted `Message
+                <telethon.tl.custom.message.Message>` (so it can be edited or
+                deleted right away), otherwise whatever
+                `client.send_rich_message
+                <telethon.client.messages.MessageMethods.send_rich_message>`
+                returned.
+
             Example
                 .. code-block:: python
 
                     @bot.on(events.GuestMessage)
                     async def handler(event):
-                        await event.rich_reply('<h1>Title</h1><p><b>Rich</b> body</p>')
+                        message = await event.rich_reply(
+                            '<h1>Title</h1><p><b>Rich</b> body</p>'
+                        )
+                        await message.rich_edit('<h1>Updated</h1>')
             """
             if html is not None and markdown is not None:
                 raise ValueError("Cannot set both html and markdown")

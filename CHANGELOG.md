@@ -4,6 +4,10 @@
 
 - **Guest bots**: added `events.GuestMessage`, which can be used with `client.on` to handle guest mode updates from https://core.telegram.org/api/bots/guest-mode. It is built both from `updateBotGuestChatQuery` (received by bot accounts) and from messages posted by guest bots (`message.guestchat_via_from`), and supports the usual `chats`, `from_users` and `pattern` filters. The event exposes `query`, `query_id`, `qts`, `reference_messages`, `is_query`, `guestchat_via_from`, `builder`, plus `reply(...)` / `respond(...)` for text and `rich_reply(...)` / `rich_respond(...)` for rich messages, which post the result into the chat with `messages.setBotGuestChatResult` for queries and send a normal (rich) message for guest bot messages. `answer(result)` is also available for pre-built `InputBotInlineResult` values.
 
+- **Guest result title**: `reply()`/`rich_reply()`/`answer()` derive the result title from the message text (HTML tags stripped, trimmed to 64 characters, `Guest message` as fallback) when none is given, since Telegram rejects empty titles for guest results with `ArticleTitleEmptyError`.
+
+- **Posted guest messages**: `reply()`/`rich_reply()`/`answer()` now return the posted `Message` built from the returned `InputBotInlineMessageID`, with `_inline_msg_id` set, so `edit()`, `edit_rich()` (and its new alias `rich_edit()`) work on it right away. `Message.edit_rich()`/`Message.rich_edit()` edit inline messages through their inline id instead of the chat, converting plain text to rich HTML when needed.
+
 ## v1.44.3 (2026-08-26)
 
 - **Inline copy buttons**: added `Button.copy(...)` support for creating `KeyboardButtonCopy` inline buttons.
