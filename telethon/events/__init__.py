@@ -10,6 +10,7 @@ from .callbackquery import CallbackQuery
 from .inlinequery import InlineQuery
 from .joinrequest import JoinRequest
 from .botupdate import BotUpdate
+from .guestmessage import GuestMessage
 
 _HANDLERS_ATTRIBUTE = "__tl.handlers"
 

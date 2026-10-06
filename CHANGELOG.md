@@ -1,5 +1,9 @@
 # Telethon-MCUB Changelog
 
+## v1.44.4 (2026-10-07)
+
+- **Guest bots**: added `events.GuestMessage`, which can be used with `client.on` to handle guest mode updates from https://core.telegram.org/api/bots/guest-mode. It is built both from `updateBotGuestChatQuery` (received by bot accounts) and from messages posted by guest bots (`message.guestchat_via_from`), and supports the usual `chats`, `from_users` and `pattern` filters. The event exposes `query`, `query_id`, `qts`, `reference_messages`, `is_query`, `guestchat_via_from`, `builder`, plus `reply(...)` / `respond(...)` for text and `rich_reply(...)` / `rich_respond(...)` for rich messages, which post the result into the chat with `messages.setBotGuestChatResult` for queries and send a normal (rich) message for guest bot messages. `answer(result)` is also available for pre-built `InputBotInlineResult` values.
+
 ## v1.44.3 (2026-08-26)
 
 - **Inline copy buttons**: added `Button.copy(...)` support for creating `KeyboardButtonCopy` inline buttons.
