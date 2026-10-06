@@ -112,6 +112,17 @@ async def test_reply_posts_message_through_guest_query():
 
 
 @pytest.mark.asyncio
+async def test_reply_derives_title_from_text():
+    event = make_event(make_query())
+
+    await event.reply('Hi there')
+
+    result = event._client.requests[0].result
+    assert result.title == 'Hi there'
+    assert result.send_message.message == 'Hi there'
+
+
+@pytest.mark.asyncio
 async def test_reply_with_buttons_and_title():
     event = make_event(make_query())
 
@@ -120,6 +131,24 @@ async def test_reply_with_buttons_and_title():
     result = event._client.requests[0].result
     assert result.title == 'Title'
     assert result.send_message.message == 'Hi'
+
+
+@pytest.mark.asyncio
+async def test_reply_title_is_never_empty():
+    event = make_event(make_query())
+
+    await event.reply('')
+
+    assert event._client.requests[0].result.title == 'Guest message'
+
+
+@pytest.mark.asyncio
+async def test_reply_trims_long_title():
+    event = make_event(make_query())
+
+    await event.reply('x' * 200)
+
+    assert len(event._client.requests[0].result.title) == 64
 
 
 @pytest.mark.asyncio
@@ -133,6 +162,17 @@ async def test_rich_reply_uses_rich_inline_message():
     rich_message = result.send_message.rich_message
     assert isinstance(rich_message, types.InputRichMessage)
     assert richparser.rich_message_to_html(rich_message) == '<h1>Title</h1><p><b>body</b></p>'
+    # Telegram rejects empty article titles, so it is derived from the text.
+    assert result.title == 'Title body'
+
+
+@pytest.mark.asyncio
+async def test_rich_reply_derives_title_from_markdown():
+    event = make_event(make_query())
+
+    await event.rich_reply(markdown='**bold** title')
+
+    assert event._client.requests[0].result.title == '**bold** title'
 
 
 @pytest.mark.asyncio

@@ -3,6 +3,33 @@ import re
 
 from .common import EventBuilder, EventCommon, name_inner_event, _into_id_set
 from ..tl import types, functions, custom
+from ..extensions import richparser
+
+
+# Telegram requires a non-empty title for the result of a guest chat query
+# (`ArticleTitleEmptyError`), even though guest bots only post the message
+# body, so we derive a title from the message text when none is given.
+_DEFAULT_TITLE = "Guest message"
+_TITLE_MAX_LENGTH = 64
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _default_title(*candidates) -> str:
+    for candidate in candidates:
+        if not candidate:
+            continue
+
+        if isinstance(candidate, str):
+            title = candidate
+        else:
+            # Already-built rich message.
+            title = richparser.rich_message_to_text(candidate) or ""
+
+        title = " ".join(_HTML_TAG_RE.sub(" ", title).split())
+        if title:
+            return title[:_TITLE_MAX_LENGTH]
+
+    return _DEFAULT_TITLE
 
 
 @name_inner_event
@@ -261,8 +288,10 @@ class GuestMessage(EventBuilder):
 
                 title (`str`, optional):
                     The title of the result, if ``result`` was not given.
-                    Guest bots normally post just the message, so this is
-                    `None` by default.
+                    Telegram rejects empty titles
+                    (`ArticleTitleEmptyError`), so when it's not given it is
+                    derived from the message text (trimmed to 64
+                    characters), falling back to ``'Guest message'``.
 
                 kwargs:
                     Any other argument is forwarded to `InlineBuilder.article
@@ -291,6 +320,12 @@ class GuestMessage(EventBuilder):
                 return
 
             if result is None:
+                if title is None:
+                    title = _default_title(
+                        kwargs.get("text"),
+                        kwargs.get("rich_text"),
+                        kwargs.get("rich_message"),
+                    )
                 result = self.builder.article(title, **kwargs)
             if inspect.isawaitable(result):
                 result = await result
@@ -325,6 +360,9 @@ class GuestMessage(EventBuilder):
                     `client.send_message
                     <telethon.client.messages.MessageMethods.send_message>`
                     for messages posted by a guest bot.
+
+                The result title defaults to the text of the message, since
+                Telegram does not accept empty titles for guest results.
 
             Example
                 .. code-block:: python
