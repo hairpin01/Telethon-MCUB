@@ -197,6 +197,28 @@ async def test_posted_message_is_edited_through_inline_id():
 
 
 @pytest.mark.asyncio
+async def test_posted_message_plain_edit_uses_edit_message():
+    event = make_event(make_query())
+    event._client.inline_id = types.InputBotInlineMessageID64(
+        dc_id=2, owner_id=3, id=77, access_hash=9
+    )
+    event._client.edits = []
+
+    message = await event.reply('body')
+
+    async def edit_message(entity, message=None, **kwargs):
+        event._client.edits.append((entity, message, kwargs))
+        return 'edited'
+
+    event._client.edit_message = edit_message
+    await message.edit('new body')
+
+    entity, text, _ = event._client.edits[0]
+    assert entity is message._inline_msg_id
+    assert text == 'new body'
+
+
+@pytest.mark.asyncio
 async def test_rich_reply_uses_rich_inline_message():
     event = make_event(make_query())
 

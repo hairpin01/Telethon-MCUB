@@ -964,15 +964,10 @@ class Message(ChatGetter, SenderGetter, TLObject):
 
         inline_msg_id = getattr(self, "_inline_msg_id", None)
         if inline_msg_id is not None:
-            from telethon.tl.functions.messages import EditInlineBotMessageRequest
-            return await self._client(
-                EditInlineBotMessageRequest(
-                    peer=inline_msg_id,
-                    message=kwargs.get("text") or args[0] if args else "",
-                    parse_mode=kwargs.get("parse_mode", "html"),
-                    buttons=kwargs.get("buttons"),
-                )
-            )
+            # Messages posted through an inline/guest result are edited
+            # through their inline id, which `client.edit_message` handles
+            # (including invoking the method from the right datacenter).
+            return await self._client.edit_message(inline_msg_id, *args, **kwargs)
 
         return await self._client.edit_message(
             await self.get_input_chat(), self.id, *args, **kwargs
