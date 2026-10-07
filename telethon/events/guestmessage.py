@@ -1,10 +1,27 @@
 import datetime
 import inspect
 import re
+from html import escape
 
 from .common import EventBuilder, EventCommon, name_inner_event, _into_id_set
 from ..tl import types, functions, custom
 from ..extensions import richparser
+
+
+_HTML_TAG_RE = re.compile(r"<([a-zA-Z][\w-]*)(?:\s[^<>]*)?/?>")
+_MD_PATTERN_RE = re.compile(
+    r"(\*[^*\n]+\*|_[^_\n]+_|`[^`\n]+`|~~[^~\n]+~~|\[[^\]\n]+\]\([^)\n]+\))"
+)
+
+
+def _looks_like_html(text: str) -> bool:
+    """`True` if the text contains anything that looks like a rich tag."""
+    return bool(_HTML_TAG_RE.search(text))
+
+
+def _looks_like_markdown(text: str) -> bool:
+    """`True` if the text contains common Markdown delimiters."""
+    return bool(_MD_PATTERN_RE.search(text))
 
 
 # Telegram requires a non-empty title for the result of a guest chat query
@@ -422,10 +439,12 @@ class GuestMessage(EventBuilder):
 
         async def rich_reply(
             self,
-            html=None,
+            text=None,
             *,
+            html=None,
             markdown=None,
             rich_message=None,
+            parse_mode=None,
             title=None,
             buttons=None,
             rtl=None,
@@ -444,16 +463,25 @@ class GuestMessage(EventBuilder):
             <telethon.client.messages.MessageMethods.send_rich_message>`.
 
             Args:
+                text (`str`, optional):
+                    The message content. The format is detected
+                    automatically: Rich HTML tags are parsed as HTML,
+                    Markdown delimiters as Markdown, and plain text is sent as
+                    a single paragraph (Telegram rejects rich messages
+                    without blocks, `RICH_MESSAGE_EMPTY`).
+
                 html (`str`, optional):
                     The rich message source in HTML format.
 
                 markdown (`str`, optional):
-                    The rich message source in Markdown format. Cannot be
-                    used together with ``html``.
+                    The rich message source in Markdown format.
 
                 rich_message (:tl:`InputRichMessage`, optional):
                     An already-built rich message, if you need full control
                     over the rich blocks and their files.
+
+                parse_mode (`str`, optional):
+                    Force the format of ``text``: `'html'` or `'markdown'`.
 
                 title (`str`, optional):
                     The title of the result, only used for guest bot queries.
@@ -488,13 +516,23 @@ class GuestMessage(EventBuilder):
 
                     @bot.on(events.GuestMessage)
                     async def handler(event):
-                        message = await event.rich_reply(
-                            '<h1>Title</h1><p><b>Rich</b> body</p>'
-                        )
+                        # plain text, `**bold**`, or Rich HTML — all work
+                        message = await event.rich_reply('Hello!')
+                        await event.rich_reply('**Bold** body')
+                        await event.rich_reply('<h1>Title</h1><p><b>Rich</b></p>')
+
                         await message.rich_edit('<h1>Updated</h1>')
             """
             if html is not None and markdown is not None:
                 raise ValueError("Cannot set both html and markdown")
+
+            if text is not None:
+                if html is not None or markdown is not None or rich_message is not None:
+                    raise ValueError(
+                        "Cannot set both text and html/markdown/rich_message"
+                    )
+
+                html, markdown = self._detect_rich_format(text, parse_mode)
 
             if self.is_query:
                 rich_text = html if html is not None else markdown
@@ -525,6 +563,40 @@ class GuestMessage(EventBuilder):
                 **kwargs,
             )
 
+        def _detect_rich_format(self, text, parse_mode=None):
+            """
+            Returns the ``(html, markdown)`` pair for a source string,
+            detecting the format the same way `client.parse_mode` does.
+            """
+            if not isinstance(text, str):
+                raise TypeError("Rich message text must be a string")
+
+            if parse_mode is not None:
+                mode = str(parse_mode).lower()
+                if mode in ("html", "htm"):
+                    return text, None
+                if mode in ("markdown", "md"):
+                    return None, text
+                if mode in ("none", "text", ""):
+                    return f"<p>{escape(text)}</p>", None
+                raise ValueError("parse_mode must be 'html', 'markdown' or None")
+
+            if _looks_like_html(text):
+                return text, None
+
+            if _looks_like_markdown(text):
+                return None, text
+
+            # Plain text: wrap it, Telegram rejects rich messages with no
+            # blocks (`RICH_MESSAGE_EMPTY`).
+            return f"<p>{escape(text)}</p>", None
+
+        async def reply_rich(self, *args, **kwargs):
+            """
+            Alias for `rich_reply`.
+            """
+            return await self.rich_reply(*args, **kwargs)
+
         async def respond(self, text="", **kwargs):
             """
             Same as `reply`, but the message is not sent as a reply to the
@@ -539,15 +611,28 @@ class GuestMessage(EventBuilder):
             return await self._reply_to_message(text, reply=False, **kwargs)
 
         async def rich_respond(
-            self, html=None, *, markdown=None, rich_message=None, **kwargs
+            self, text=None, *, html=None, markdown=None, rich_message=None, **kwargs
         ):
             """
             Same as `rich_reply`, but the rich message is not sent as a reply
             to the message that triggered the guest bot.
             """
+            if text is not None:
+                if html is not None or markdown is not None or rich_message is not None:
+                    raise ValueError(
+                        "Cannot set both text and html/markdown/rich_message"
+                    )
+
+                html, markdown = self._detect_rich_format(
+                    text, kwargs.pop("parse_mode", None)
+                )
+
             if self.is_query:
                 return await self.rich_reply(
-                    html, markdown=markdown, rich_message=rich_message, **kwargs
+                    html=html,
+                    markdown=markdown,
+                    rich_message=rich_message,
+                    **kwargs,
                 )
 
             return await self._rich_reply_to_message(

@@ -157,6 +157,85 @@ async def test_reply_trims_long_title():
 
 
 @pytest.mark.asyncio
+async def test_rich_reply_wraps_plain_text_into_a_paragraph():
+    """Plain text used to produce no blocks and RICH_MESSAGE_EMPTY."""
+    event = make_event(make_query())
+
+    await event.rich_reply('hui')
+
+    result = event._client.requests[0].result
+    rich_message = result.send_message.rich_message
+    assert rich_message.blocks
+    assert richparser.rich_message_to_html(rich_message) == '<p>hui</p>'
+
+
+@pytest.mark.asyncio
+async def test_rich_reply_detects_markdown():
+    event = make_event(make_query())
+
+    await event.rich_reply('**bold** text')
+
+    rich_message = event._client.requests[0].result.send_message.rich_message
+    assert isinstance(rich_message, types.InputRichMessageMarkdown)
+    assert rich_message.markdown == '**bold** text'
+
+
+@pytest.mark.asyncio
+async def test_rich_reply_detects_html():
+    event = make_event(make_query())
+
+    await event.rich_reply('<h1>Title</h1>')
+
+    rich_message = event._client.requests[0].result.send_message.rich_message
+    assert richparser.rich_message_to_html(rich_message) == '<h1>Title</h1>'
+
+
+@pytest.mark.asyncio
+async def test_rich_reply_parse_mode_forces_format():
+    event = make_event(make_query())
+
+    # Forced HTML, so the Markdown delimiters are plain text.
+    await event.rich_reply('**bold**', parse_mode='html')
+    rich_message = event._client.requests[0].result.send_message.rich_message
+    assert richparser.rich_message_to_html(rich_message) == '<p>**bold**</p>'
+
+    # Forced Markdown, so the HTML is sent as Markdown text.
+    event = make_event(make_query())
+    await event.rich_reply('<b>x</b>', parse_mode='markdown')
+    rich_message = event._client.requests[0].result.send_message.rich_message
+    assert isinstance(rich_message, types.InputRichMessageMarkdown)
+    assert rich_message.markdown == '<b>x</b>'
+
+
+@pytest.mark.asyncio
+async def test_rich_reply_rejects_text_with_html():
+    event = make_event(make_query())
+
+    with pytest.raises(ValueError):
+        await event.rich_reply('text', html='<b>html</b>')
+
+
+@pytest.mark.asyncio
+async def test_rich_reply_escapes_plain_text():
+    event = make_event(make_query())
+
+    await event.rich_reply('a < b & c')
+
+    rich_message = event._client.requests[0].result.send_message.rich_message
+    assert richparser.rich_message_to_html(rich_message) == '<p>a &lt; b &amp; c</p>'
+
+
+@pytest.mark.asyncio
+async def test_reply_rich_is_alias_for_rich_reply():
+    event = make_event(make_query())
+
+    await event.reply_rich('<p>body</p>')
+
+    result = event._client.requests[0].result
+    assert isinstance(result.send_message, types.InputBotInlineMessageRichMessage)
+
+
+@pytest.mark.asyncio
 async def test_reply_returns_posted_message():
     event = make_event(make_query())
     event._client.inline_id = types.InputBotInlineMessageID64(

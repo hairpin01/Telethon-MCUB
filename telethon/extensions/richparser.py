@@ -27,13 +27,17 @@ from __future__ import annotations
 
 import base64
 import binascii
+import re
 from dataclasses import dataclass, field
-from html import escape
+from html import escape, unescape
 from urllib.parse import urlsplit
 from html.parser import HTMLParser
 from typing import Any, Dict, List, Optional, Union
 
 from ..tl import types
+
+# Used to recover visible text from sources that have no rich tags at all.
+_PLAIN_TAG_RE = re.compile(r"<[^>]+>")
 
 def _attr(attrs: list, *names: str, default: Optional[str] = None) -> Optional[str]:
     names_l = {n.lower() for n in names}
@@ -1955,6 +1959,11 @@ def validate_rich_message(rich_message: object) -> None:
     _validate_rich_blocks(list(getattr(rich_message, "blocks", ()) or ()))
 
 
+def rich_html_to_plain_text(html: str) -> str:
+    """Visible text of a Rich HTML source, with tags removed."""
+    return " ".join(unescape(_PLAIN_TAG_RE.sub(" ", html or "")).split())
+
+
 def html_to_input_rich_message(
     html: str,
     *,
@@ -1964,9 +1973,19 @@ def html_to_input_rich_message(
     documents=None,
     users=None,
 ):
-    """Parse Rich HTML into a real ``types.InputRichMessage`` instance."""
+    """Parse Rich HTML into a real ``types.InputRichMessage`` instance.
+
+    Text without any rich tag is wrapped into a single paragraph, since
+    Telegram rejects rich messages without blocks (``RICH_MESSAGE_EMPTY``).
+    """
+    blocks = html_to_tl_blocks(html)
+    if not blocks:
+        plain = rich_html_to_plain_text(html)
+        if plain:
+            blocks = [types.PageBlockParagraph(types.TextPlain(plain))]
+
     return types.InputRichMessage(
-        html_to_tl_blocks(html),
+        blocks,
         rtl=rtl,
         noautolink=noautolink,
         photos=photos,
