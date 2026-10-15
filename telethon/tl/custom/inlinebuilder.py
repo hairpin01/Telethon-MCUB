@@ -1,5 +1,9 @@
+import asyncio
 import hashlib
+import io
 import re
+import urllib.parse
+import urllib.request
 
 from .. import functions, types
 from ... import utils
@@ -20,6 +24,54 @@ _TYPE_TO_MIMES = {
 }
 
 _RICH_MEDIA_REF_RE = re.compile(r'tg://(photo|document|video|audio|media)\?id=([^"\'<>\s&]+)')
+
+# Rich files must reference *uploaded* media, so HTTP(S) URLs from
+# ``rich_media`` are downloaded client-side first. The cap below guards
+# against unbounded memory use on hostile/oversized URLs.
+_RICH_MEDIA_MAX_DOWNLOAD_BYTES = 64 * 1024 * 1024
+_RICH_MEDIA_DOWNLOAD_TIMEOUT = 30
+_RICH_MEDIA_USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+)
+
+
+def _rich_media_url_filename(url, media_id):
+    """Pick a file name for a downloaded URL (extension matters for photos)."""
+    path = urllib.parse.urlsplit(url).path
+    name = path.rsplit("/", 1)[-1] if path else ""
+    name = urllib.parse.unquote(name).strip()
+    if not name or "." not in name:
+        name = f"rich-media-{media_id}"
+    return name
+
+
+def _download_rich_media_url(url):
+    """Synchronously download *url* with a size cap (run in a thread)."""
+    request = urllib.request.Request(url, headers={"User-Agent": _RICH_MEDIA_USER_AGENT})
+    with urllib.request.urlopen(request, timeout=_RICH_MEDIA_DOWNLOAD_TIMEOUT) as response:
+        try:
+            declared = int(response.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            declared = 0
+        if declared > _RICH_MEDIA_MAX_DOWNLOAD_BYTES:
+            raise ValueError(
+                f"rich_media URL is too large ({declared} bytes, "
+                f"limit {_RICH_MEDIA_MAX_DOWNLOAD_BYTES})"
+            )
+        chunks = []
+        size = 0
+        while True:
+            chunk = response.read(65536)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > _RICH_MEDIA_MAX_DOWNLOAD_BYTES:
+                raise ValueError(
+                    f"rich_media URL exceeds {_RICH_MEDIA_MAX_DOWNLOAD_BYTES} bytes"
+                )
+            chunks.append(chunk)
+    return b"".join(chunks)
 
 
 class InlineBuilder:
@@ -383,17 +435,42 @@ class InlineBuilder:
         raise TypeError("rich_media value must be a Telegram photo/document/media object or an HTTP(S) URL")
 
     async def _upload_url_as_rich_file(self, media_id, url, media_type):
+        # Rich files must reference uploaded media: InputMedia*External
+        # only tells the server where to fetch at send time and carries no
+        # usable file reference, so UploadMedia would produce an empty
+        # photo/document. Download first, then upload like a local file.
+        data = await asyncio.to_thread(_download_rich_media_url, url)
+        stream = io.BytesIO(data)
+        stream.name = _rich_media_url_filename(url, media_id)
         _file_handle, media, _as_image = await self._client._file_to_media(
-            url,
+            stream,
             force_document=media_type != "photo",
+            as_image=media_type == "photo",
             supports_streaming=media_type == "video",
         )
         uploaded = await self._client(
             functions.messages.UploadMediaRequest(types.InputPeerSelf(), media)
         )
-        if media_type == "photo":
-            return types.InputRichFilePhoto(media_id, utils.get_input_photo(uploaded.photo))
-        return types.InputRichFileDocument(media_id, utils.get_input_document(uploaded.document))
+        photo = getattr(uploaded, "photo", None)
+        if photo is not None and not isinstance(photo, types.PhotoEmpty):
+            return (
+                types.InputRichFilePhoto(media_id, utils.get_input_photo(photo)),
+                "photo",
+            )
+        document = getattr(uploaded, "document", None)
+        if document is None or isinstance(document, types.DocumentEmpty):
+            raise ValueError(f"rich_media URL {url!r} produced no usable photo or document")
+        mime = getattr(document, "mime_type", "") or ""
+        if mime.startswith("audio/"):
+            resolved = "audio"
+        elif mime.startswith("video/"):
+            resolved = "video"
+        else:
+            resolved = "document"
+        return (
+            types.InputRichFileDocument(media_id, utils.get_input_document(document)),
+            resolved,
+        )
 
     # noinspection PyIncorrectDocstring
     async def photo(
