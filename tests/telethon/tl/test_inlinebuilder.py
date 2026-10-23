@@ -1,6 +1,7 @@
 import pytest
 
 from telethon.tl import types
+from telethon.tl.custom import inlinebuilder as inlinebuilder_module
 from telethon.tl.custom.inlinebuilder import InlineBuilder
 
 
@@ -100,3 +101,121 @@ def test_rich_media_alias_rewrite():
     assert InlineBuilder._replace_media_ref_type(
         '<a href="tg://media?id=hero">Media</a>', "hero", "video"
     ) == '<a href="tg://video?id=hero">Media</a>'
+
+
+class _UrlUploadFakeClient(MockClient):
+    """Pretends to upload: returns canned UploadMedia result."""
+
+    def __init__(self, uploaded):
+        self.uploaded = uploaded
+        self.seen_name = None
+
+    async def _file_to_media(self, file, **kwargs):
+        self.seen_name = getattr(file, "name", None)
+        assert file.read() == b"fake-bytes"
+        return None, object(), True
+
+    async def __call__(self, request):
+        return self.uploaded
+
+
+@pytest.mark.asyncio
+async def test_upload_url_as_rich_file_downloads_and_attaches_photo(monkeypatch):
+    monkeypatch.setattr(
+        inlinebuilder_module, "_download_rich_media_url", lambda url: b"fake-bytes"
+    )
+    photo = types.Photo(
+        id=7, access_hash=8, file_reference=b"fr", date=None, sizes=[], dc_id=2
+    )
+    client = _UrlUploadFakeClient(types.MessageMediaPhoto(photo=photo))
+    builder = InlineBuilder(client)
+
+    rich_file, resolved = await builder._upload_url_as_rich_file(
+        "hero", "https://example.com/pic.jpg", "photo"
+    )
+
+    assert isinstance(rich_file, types.InputRichFilePhoto)
+    assert rich_file.id == "hero"
+    assert (rich_file.photo.id, rich_file.photo.access_hash) == (7, 8)
+    assert resolved == "photo"
+    assert client.seen_name == "pic.jpg"
+
+
+@pytest.mark.asyncio
+async def test_upload_url_as_rich_file_resolves_video_mime(monkeypatch):
+    monkeypatch.setattr(
+        inlinebuilder_module, "_download_rich_media_url", lambda url: b"fake-bytes"
+    )
+    document = types.Document(
+        id=9,
+        access_hash=10,
+        file_reference=b"fr2",
+        date=None,
+        mime_type="video/mp4",
+        size=123,
+        dc_id=2,
+        attributes=[],
+    )
+    client = _UrlUploadFakeClient(types.MessageMediaDocument(document=document))
+    builder = InlineBuilder(client)
+
+    rich_file, resolved = await builder._upload_url_as_rich_file(
+        "clip", "https://example.com/v?a=b", "video"
+    )
+
+    assert isinstance(rich_file, types.InputRichFileDocument)
+    assert rich_file.id == "clip"
+    assert resolved == "video"
+    # extensionless URL falls back to a synthetic file name
+    assert client.seen_name == "rich-media-clip"
+
+
+@pytest.mark.asyncio
+async def test_upload_url_as_rich_file_rejects_empty_upload(monkeypatch):
+    monkeypatch.setattr(
+        inlinebuilder_module, "_download_rich_media_url", lambda url: b"fake-bytes"
+    )
+    builder = InlineBuilder(_UrlUploadFakeClient(types.MessageMediaEmpty()))
+
+    with pytest.raises(ValueError, match="no usable"):
+        await builder._upload_url_as_rich_file(
+            "hero", "https://example.com/pic.jpg", "photo"
+        )
+
+
+def test_download_rich_media_url_rejects_oversize(monkeypatch):
+    import urllib.request
+
+    class _Resp:
+        headers = {
+            "Content-Length": str(
+                inlinebuilder_module._RICH_MEDIA_MAX_DOWNLOAD_BYTES + 1
+            )
+        }
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, n=-1):
+            raise AssertionError("body must not be read")
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: _Resp())
+
+    with pytest.raises(ValueError, match="too large"):
+        inlinebuilder_module._download_rich_media_url("https://example.com/big.bin")
+
+
+def test_rich_media_url_filename():
+    assert (
+        inlinebuilder_module._rich_media_url_filename(
+            "https://example.com/a/pic.jpg?x=1", "id1"
+        )
+        == "pic.jpg"
+    )
+    assert (
+        inlinebuilder_module._rich_media_url_filename("https://example.com/v", "clip")
+        == "rich-media-clip"
+    )
