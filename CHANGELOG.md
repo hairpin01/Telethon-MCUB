@@ -1,5 +1,15 @@
 # Telethon-MCUB Changelog
 
+## v1.44.5 (2026-10-23)
+
+- **Inline rich buttons**: `<tg-button>` inside text (`<p>`, headings, list items, table cells, ...) now parses to `TextButton` and renders back, so a rounded "pill" can be used like `<mark>`: `<tg-button type="disabled" style="success">v1.3.0</tg-button>`. `type="disabled"` makes a non-clickable badge; every other button type works inline too. `<tg-badge>` / `<tg-pill>` are shortcuts for a disabled inline button. Without `type`, it is inferred (`url` -> url, `data` -> callback_data, otherwise disabled). Nested buttons keep the text of the inner one.
+
+- **Stable Rich HTML**: `rich_message_to_html(...)` now returns canonical HTML, so `render -> parse -> render` (and `html_to_tl_blocks` + render) gives the same string. Buttons use one attribute order (`type`, attributes, `style`) and canonical names (`forward-text`, `text`, `allow-*="true"`); readable callback data is emitted as `data`, other bytes as `data-base64`. Received `TextButton` is no longer dropped. `<code>`/`<pre>` hold plain text, `<pre>` without a language has no inner `<code>`, `<hr/>` is used everywhere, fallback blocks (`[photo]`, `[map]`, ...) are wrapped in `<p>`, `PageBlockBlockquoteBlocks` joins paragraphs with a newline, `TextDiff` keeps its new text.
+
+- **Collapsed quotes**: `PageBlockBlockquote.collapsed` <-> `<blockquote expandable="true">`.
+
+- **Parser whitespace**: indentation between child blocks of `<details>`, `<ul>`, `<table>` and `<tg-button-row>` no longer turns into stray text.
+
 ## v1.44.4 (2026-10-07)
 
 - **Guest bots**: added `events.GuestMessage`, which can be used with `client.on` to handle guest mode updates from https://core.telegram.org/api/bots/guest-mode. It is built both from `updateBotGuestChatQuery` (received by bot accounts) and from messages posted by guest bots (`message.guestchat_via_from`), and supports the usual `chats`, `from_users` and `pattern` filters. The event exposes `query`, `query_id`, `qts`, `reference_messages`, `is_query`, `guestchat_via_from`, `builder`, plus `reply(...)` / `respond(...)` for text and `rich_reply(...)` / `rich_respond(...)` for rich messages, which post the result into the chat with `messages.setBotGuestChatResult` for queries and send a normal (rich) message for guest bot messages. `reply_rich()` is an alias of `rich_reply()`. `answer(result)` is also available for pre-built `InputBotInlineResult` values.

@@ -18,7 +18,7 @@ Supported Bot API 10.1/10.2 blocks:
 Inline: Bold · Italic · Underline · Strikethrough · Spoiler · Code
         Subscript · Superscript · Marked · Url · Mention · Email
         Phone · CustomEmoji · DateTime · MathInline · AnchorLink
-        Reference
+        Reference · Button (inline "pill": <tg-button> inside text)
 
 Input HTML uses official Telegram Rich HTML tags. Some MCUB-friendly
 aliases are accepted directly by this parser where practical.
@@ -86,6 +86,94 @@ def _it(items: "List[Inline]") -> dict:
     if len(items) == 1:
         return items[0].to_tl()
     return {"_": "RichTextConcat", "texts": [i.to_tl() for i in items]}
+
+_BUTTON_STYLES = frozenset({"primary", "danger", "success", "link"})
+_BUTTON_ATTR_ORDER: Dict[str, tuple] = {
+    "url": ("url",),
+    "web_app": ("url",),
+    "callback_data": ("data", "data-base64", "requires-password"),
+    "login_url": ("url", "button-id", "forward-text", "request-write-access"),
+    "switch_inline_query": ("query",),
+    "switch_inline_query_current_chat": ("query",),
+    "switch_inline_query_chosen_chat": (
+        "query", "allow-user-chats", "allow-bot-chats",
+        "allow-group-chats", "allow-channel-chats",
+    ),
+    "copy_text": ("text",),
+    "user_profile": ("user-id",),
+    "disabled": (), "game": (), "buy": (),
+}
+_BUTTON_ATTR_ALIASES = {"fwd-text": "forward-text", "copy-text": "text"}
+_BUTTON_BOOL_ATTRS = frozenset({
+    "requires-password", "request-write-access", "allow-user-chats",
+    "allow-bot-chats", "allow-group-chats", "allow-channel-chats",
+})
+
+
+def _canon_button_style(style: Optional[str]) -> Optional[str]:
+    style = (style or "").strip().lower()
+    return style if style in _BUTTON_STYLES else None
+
+
+def _canon_button_type(raw: Optional[str], ad: Optional[dict] = None) -> str:
+    """Resolve ``type`` of a <tg-button>; infer it when the attribute is missing."""
+    button_type = (raw or "").strip().lower().replace("-", "_")
+    if not button_type and ad is not None:
+        if "url" in ad:
+            return "url"
+        if "data" in ad or "data-base64" in ad:
+            return "callback_data"
+        return "disabled"
+    return button_type if button_type in _BUTTON_ATTR_ORDER else "disabled"
+
+
+def _canon_button_attrs(button_type: str, attrs: dict) -> Dict[str, str]:
+    """Return attributes in canonical names, values and order."""
+    src = {k.lower(): ("" if v is None else str(v)) for k, v in (attrs or {}).items()}
+    for alias, name in _BUTTON_ATTR_ALIASES.items():
+        if alias in src and name not in src:
+            src[name] = src[alias]
+    order = _BUTTON_ATTR_ORDER.get(button_type, ())
+    out: Dict[str, str] = {}
+    for name in order:
+        if name not in src:
+            continue
+        value = src[name]
+        if name in _BUTTON_BOOL_ATTRS:
+            if _truthy(value):
+                out[name] = "true"
+            continue
+        out[name] = value
+    if button_type == "callback_data" and "data-base64" in out:
+        # Prefer the readable form when the bytes are clean UTF-8 text.
+        try:
+            raw = base64.b64decode(out["data-base64"], validate=True)
+        except (binascii.Error, ValueError):
+            out.pop("data-base64")          # malformed: `data` is the fallback
+        else:
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                text = None
+            if text is not None and not any(ord(c) < 32 or ord(c) == 127 for c in text):
+                out.pop("data-base64")
+                out["data"] = text
+            else:
+                out.pop("data", None)       # base64 wins over `data`
+    return {name: out[name] for name in order if name in out}
+
+
+def _button_html(button_type: str, attrs: dict, style: Optional[str], inner_html: str) -> str:
+    button_type = _canon_button_type(button_type)
+    parts = [f'type="{escape(button_type, quote=True)}"']
+    parts.extend(
+        f'{name}="{escape(value, quote=True)}"'
+        for name, value in _canon_button_attrs(button_type, attrs).items()
+    )
+    style = _canon_button_style(style)
+    if style:
+        parts.append(f'style="{style}"')
+    return f"<tg-button {' '.join(parts)}>{inner_html}</tg-button>"
 
 
 @dataclass
@@ -269,11 +357,33 @@ class TextReference:
         return {"_": "RichTextReference", "anchor": self.name, "text": _it(self.items)}
 
 
+@dataclass
+class TextButton:
+    """<tg-button> inside text → RichTextButton (rounded inline "pill").
+
+    ``type="disabled"`` makes a non-clickable badge (like <mark>, but rounded);
+    other types (url, callback_data, copy_text, ...) are clickable.
+    """
+    items: List["Inline"] = field(default_factory=list)
+    type: str = "disabled"
+    attrs: Dict[str, str] = field(default_factory=dict)
+    style: Optional[str] = None
+
+    def to_html(self) -> str:
+        return _button_html(self.type, self.attrs, self.style, _ih(self.items))
+
+    def to_tl(self) -> dict:
+        button_type = _canon_button_type(self.type)
+        return {"_": "RichTextButton", "text": _it(self.items), "type": button_type,
+                "attrs": _canon_button_attrs(button_type, self.attrs),
+                "style": _canon_button_style(self.style)}
+
+
 Inline = Union[
     TextPlain, TextBold, TextItalic, TextUnderline, TextStrike,
     TextSpoiler, TextCode, TextSubscript, TextSuperscript, TextMarked,
     TextUrl, TextMention, TextEmail, TextPhone, TextEmoji, TextDateTime,
-    TextMathInline, TextAnchorLink, TextReference,
+    TextMathInline, TextAnchorLink, TextReference, TextButton,
 ]
 
 
@@ -485,17 +595,16 @@ class BlockQuotation:
         inner = _ih(self.content)
         if self.author:
             inner += f"<cite>{_ih(self.author)}</cite>"
-        exp = ""
-        if self.expandable is not None:
-            exp = f' expandable="{"true" if self.expandable else "false"}"'
+        exp = ' expandable="true"' if self.expandable else ""
         return f"<blockquote{exp}>{inner}</blockquote>"
 
     def to_tl(self) -> dict:
         d: dict = {"_": "InputRichBlockBlockQuotation", "text": _it(self.content)}
         if self.author:
             d["author"] = _it(self.author)
-        if self.expandable is not None:
-            d["expandable"] = self.expandable
+        if self.expandable:
+            d["expandable"] = True
+            d["collapsed"] = True   # TL pageBlockBlockquote.collapsed
         return d
 
 
@@ -818,19 +927,13 @@ class BlockThinking:
 
 
 def _button_attr_names(button_type: str) -> set[str]:
-    common = {"type", "style"}
-    by_type = {
-        "url": {"url"}, "web_app": {"url"},
-        "callback_data": {"data", "data-base64", "requires-password"},
-        "login_url": {"url", "forward-text", "fwd-text", "button-id", "request-write-access"},
-        "switch_inline_query": {"query"},
-        "switch_inline_query_current_chat": {"query"},
-        "switch_inline_query_chosen_chat": {
-            "query", "allow-user-chats", "allow-bot-chats", "allow-group-chats", "allow-channel-chats",
-        },
-        "copy_text": {"text", "copy-text"}, "user_profile": {"user-id"},
-    }
-    return common | by_type.get(button_type, set())
+    """Attribute names accepted on <tg-button> for ``button_type`` (incl. aliases)."""
+    names = set(_BUTTON_ATTR_ORDER.get(button_type, ())) | {"type", "style"}
+    if button_type == "login_url":
+        names.add("fwd-text")
+    if button_type == "copy_text":
+        names.add("copy-text")
+    return names
 
 
 @dataclass
@@ -841,15 +944,7 @@ class Button:
     style: Optional[str] = None
 
     def to_html(self) -> str:
-        attrs = [f'type="{escape(self.type, quote=True)}"']
-        if self.style:
-            attrs.append(f'style="{escape(self.style, quote=True)}"')
-        allowed = _button_attr_names(self.type)
-        attrs.extend(
-            f'{name}="{escape(value, quote=True)}"'
-            for name, value in self.attrs.items() if name in allowed
-        )
-        return f"<tg-button {' '.join(attrs)}>{_ih(self.content)}</tg-button>"
+        return _button_html(self.type, self.attrs, self.style, _ih(self.content))
 
 
 @dataclass
@@ -866,8 +961,10 @@ class BlockButtonRow:
             "_": "InputRichBlockButtonRow",
             "buttons": [
                 {
-                    "text": _it(button.content), "type": button.type,
-                    "attrs": button.attrs, "style": button.style,
+                    "text": _it(button.content),
+                    "type": _canon_button_type(button.type),
+                    "attrs": _canon_button_attrs(_canon_button_type(button.type), button.attrs),
+                    "style": _canon_button_style(button.style),
                 }
                 for button in self.buttons
             ],
@@ -907,6 +1004,13 @@ _INLINE_WRAP: Dict[str, Any] = {
 
 _VOID_TAGS = frozenset({"hr", "br", "img", "tg-map", "tg-animation", "tg-voice",
                          "input"})
+
+_STRUCTURAL_KINDS = frozenset({
+    "list", "table", "tr", "button_row", "figure", "collage", "slideshow",
+})
+
+# <tg-badge>/<tg-pill> are MCUB aliases for a non-clickable inline button.
+_BUTTON_TAGS = frozenset({"tg-button", "tg-badge", "tg-pill"})
 
 _MAILTO = "mailto:"
 _TEL = "tel:"
@@ -958,12 +1062,17 @@ class RichHTMLParser(HTMLParser):
     def _inline_target(self) -> Optional[_Frame]:
         """Return the nearest frame that accepts inline content."""
         for frame in reversed(self._stack):
+            if frame.kind in _STRUCTURAL_KINDS:
+                # Text between <tr>/<li>/<tg-button> ... siblings is layout
+                # whitespace; never let it leak into an outer container.
+                return None
             if frame.kind in (
                 "paragraph", "h1", "h2", "h3", "h4", "h5", "h6",
                 "footer", "blockquote", "aside", "details", "li",
                 "figcaption", "caption_credit", "table_caption",
                 "td", "th", "summary", "thinking",
                 "pre", "math_inline", "math_block", "inline_code", "button",
+                "inline_button",
                 "tg_emoji", "tg_time",
                 # Inline frames accept text too.
                 "inline",
@@ -985,7 +1094,13 @@ class RichHTMLParser(HTMLParser):
         if top and top.kind in ("blockquote", "aside", "td", "th"):
             # These TL shapes hold RichText rather than child PageBlocks.
             if isinstance(block, BlockParagraph):
-                top.items.extend(block.content)
+                if top.items and block.content:
+                    top.append_text("\n")
+                for item in block.content:
+                    if isinstance(item, TextPlain):
+                        top.append_text(item.text)
+                    else:
+                        top.items.append(item)
                 return
         if top and top.kind in ("collage", "slideshow"):
             # Collage/slideshow media items are added via _handle_media_void.
@@ -1092,16 +1207,23 @@ class RichHTMLParser(HTMLParser):
             }))
             return
 
-        if tag == "tg-button":
+        if tag in _BUTTON_TAGS:
+            if any(f.kind in ("button", "inline_button") for f in self._stack):
+                # Buttons cannot nest: keep the content, drop the inner button.
+                self._push(_Frame("inline", tag, ad, {"wrap": None}))
+                return
+            raw_type = ad.get("type")
+            if raw_type is None and tag != "tg-button":
+                raw_type = "disabled"
+            button_type = _canon_button_type(raw_type, ad)
+            extra = {
+                "type": button_type,
+                "attrs": _canon_button_attrs(button_type, ad),
+                "style": _canon_button_style(ad.get("style")),
+            }
             row = self._top()
-            if row and row.kind == "button_row":
-                button_type = ad.get("type", "url").lower()
-                self._push(_Frame("button", tag, ad, {
-                    "type": button_type,
-                    "attrs": {name: value for name, value in ad.items()
-                              if name in _button_attr_names(button_type)},
-                    "style": ad.get("style"),
-                }))
+            kind = "button" if row and row.kind == "button_row" else "inline_button"
+            self._push(_Frame(kind, tag, ad, extra))
             return
 
         if tag == "figure":
@@ -1367,11 +1489,18 @@ class RichHTMLParser(HTMLParser):
         if kind == "button":
             row = self._top()
             if row and row.kind == "button_row":
-                attrs = dict(frame.extra["attrs"])
-                attrs.pop("type", None)
-                attrs.pop("style", None)
                 row.extra["buttons"].append(Button(
-                    frame.items, frame.extra["type"], attrs, frame.extra["style"]
+                    frame.items, frame.extra["type"],
+                    dict(frame.extra["attrs"]), frame.extra["style"],
+                ))
+            return
+
+        if kind == "inline_button":
+            target = self._inline_target()
+            if target is not None:
+                target.items.append(TextButton(
+                    frame.items, frame.extra["type"],
+                    dict(frame.extra["attrs"]), frame.extra["style"],
                 ))
             return
 
@@ -1609,6 +1738,9 @@ class RichHTMLParser(HTMLParser):
     def handle_data(self, data: str) -> None:  # type: ignore[override]
         target = self._inline_target()
         if target:
+            if (target.kind in ("details", "li") and not target.items
+                    and not data.strip()):
+                return  # indentation between child blocks
             target.append_text(data)
 
     def close(self) -> None:
@@ -1681,6 +1813,12 @@ def _tl_text(value: Any):
 
     if kind == "RichTextCode":
         return types.TextFixed(types.TextPlain(value.get("text", "")))
+    if kind == "RichTextButton":
+        return types.TextButton(
+            _tl_text(value.get("text")),
+            _tl_button_type(value),
+            style=_tl_button_style(value.get("style")),
+        )
     if kind == "RichTextUrl":
         return types.TextUrl(
             _tl_text(value.get("text")),
@@ -1772,8 +1910,17 @@ def _button_url(attrs: dict) -> str:
     return url
 
 
-def _tl_button(value: dict):
-    attrs = value.get("attrs", {})
+def _tl_button_style(style_name):
+    styles = {
+        "primary": {"bg_primary": True}, "danger": {"bg_danger": True},
+        "success": {"bg_success": True}, "link": {"link": True},
+    }
+    return types.RichButtonStyle(**styles[style_name]) if style_name in styles else None
+
+
+def _tl_button_type(value: dict):
+    """InlineButtonType* for a parser button dict (row button or inline TextButton)."""
+    attrs = value.get("attrs") or {}
     button_type = value.get("type", "url")
     if button_type == "url":
         button = types.InlineButtonTypeUrl(_button_url(attrs))
@@ -1828,14 +1975,15 @@ def _tl_button(value: dict):
         )
     else:
         button = types.InlineButtonTypeUrl(attrs.get("url", ""))
+    return button
 
-    style_name = value.get("style")
-    styles = {
-        "primary": {"bg_primary": True}, "danger": {"bg_danger": True},
-        "success": {"bg_success": True}, "link": {"link": True},
-    }
-    style = types.RichButtonStyle(**styles[style_name]) if style_name in styles else None
-    return types.PageButton(_tl_text(value.get("text")), button, style)
+
+def _tl_button(value: dict):
+    return types.PageButton(
+        _tl_text(value.get("text")),
+        _tl_button_type(value),
+        _tl_button_style(value.get("style")),
+    )
 
 
 def _tl_block(value: Any):
@@ -1882,6 +2030,7 @@ def _tl_block(value: Any):
         return types.PageBlockBlockquote(
             _tl_text(value.get("text")),
             _tl_text(value.get("author")),
+            collapsed=True if value.get("collapsed") else None,
         )
     if kind == "InputRichBlockPullQuotation":
         return types.PageBlockPullquote(
@@ -2050,7 +2199,6 @@ def _render_text_node(node: object, depth: int = 0) -> str:
             "TextItalic": ("i", "i"),
             "TextUnderline": ("u", "u"),
             "TextStrike": ("s", "s"),
-            "TextFixed": ("code", "code"),
             "TextSubscript": ("sub", "sub"),
             "TextSuperscript": ("sup", "sup"),
             "TextMarked": ("mark", "mark"),
@@ -2065,6 +2213,7 @@ def _render_text_node(node: object, depth: int = 0) -> str:
             "TextBotCommand",
             "TextCashtag",
             "TextDate",
+            "TextDiff",
             "TextHashtag",
             "TextMention",
             "TextWithEntities",
@@ -2072,11 +2221,17 @@ def _render_text_node(node: object, depth: int = 0) -> str:
         if node_type in passthrough_types:
             return _render_text_node(getattr(node, "text", None), depth + 1)
 
+        if node_type == "TextFixed":
+            # <code> holds plain text only (the parser flattens it), so
+            # render it flat to keep render -> parse -> render stable.
+            return "<code>{}</code>".format(_escape_html(_render_text_content(node)))
+        if node_type == "TextButton":
+            return _render_button(node)
         if node_type == "TextMath":
             return '<tg-math>{}</tg-math>'.format(_escape_html(getattr(node, "source", "")))
         if node_type == "TextCustomEmoji":
             document_id = _escape_html(getattr(node, "document_id", ""))
-            alt = _escape_html(getattr(node, "alt", ""))
+            alt = _escape_html(getattr(node, "alt", "") or " ")
             return '<tg-emoji emoji-id="{}">{}</tg-emoji>'.format(document_id, alt)
         if node_type == "TextUrl":
             return _render_text_link(getattr(node, "url", ""), getattr(node, "text", None), depth)
@@ -2115,11 +2270,12 @@ def _render_text_node(node: object, depth: int = 0) -> str:
 
 
 def _render_code_content(value: object) -> str:
+    # <pre> content is plain text: formatting inside it is not representable.
     if value is None:
         return ""
     if isinstance(value, str):
         return _escape_html(value)
-    return _render_text_node(value)
+    return _escape_html(_render_text_content(value))
 
 
 def _render_code_block(text: object, language: object = "", class_name: object = None) -> str:
@@ -2129,8 +2285,10 @@ def _render_code_block(text: object, language: object = "", class_name: object =
         code_class = "language-{}".format(language)
     else:
         code_class = ""
-    class_attr = ' class="{}"'.format(_escape_html(code_class)) if code_class else ""
-    return "<pre><code{}>{}</code></pre>".format(class_attr, _render_code_content(text))
+    body = _render_code_content(text)
+    if not code_class:
+        return "<pre>{}</pre>".format(body)
+    return '<pre><code class="{}">{}</code></pre>'.format(_escape_html(code_class), body)
 
 
 def _render_blocks(blocks: object, separator: str = "") -> str:
@@ -2157,12 +2315,18 @@ def _render_caption(caption: object) -> str:
         return ""
 
 
+def _para(inner: str) -> str:
+    return "<p>{}</p>".format(inner)
+
+
 def _render_labeled_block(label: str, caption: object = None) -> str:
+    # Wrapped in <p>: loose top-level text is dropped by the parser, which
+    # would make a second render -> parse pass lose the block.
     rendered = label
     rendered_caption = _render_caption(caption)
     if rendered_caption:
         rendered = "{}\n{}".format(rendered, rendered_caption)
-    return rendered + "\n"
+    return _para(rendered)
 
 
 def _render_media_block(block: object, label: str, id_attr: str = None, scheme: str = None) -> str:
@@ -2197,7 +2361,7 @@ def _render_table(block: object) -> str:
         for name in ("bordered", "striped", "compact"):
             if getattr(block, name, False):
                 attrs += " " + name
-        title = _render_text_node(getattr(block, "title", None))
+        title = _escape_html(_render_text_content(getattr(block, "title", None)))
         rows = []
         for row in getattr(block, "rows", None) or ():
             cells = []
@@ -2250,7 +2414,7 @@ def _render_related_articles(block: object) -> str:
             rendered = _render_related_article(article)
             if rendered:
                 lines.append("• {}".format(rendered))
-        return "\n".join(lines) + ("\n" if lines else "")
+        return _para("\n".join(lines)) if lines else ""
     except Exception:
         return ""
 
@@ -2316,78 +2480,77 @@ def _render_list(block: object, ordered: bool = False) -> str:
 
 
 def _render_button(button: object) -> str:
+    """Render PageButton / TextButton through the canonical <tg-button> emitter."""
     button_type = getattr(button, "type", None)
-    type_name = button_type.__class__.__name__ if button_type else ""
-    attrs = []
-    mapping = {
-        "InlineButtonTypeUrl": ("url", ("url",)),
-        "InlineButtonTypeWebView": ("web_app", ("url",)),
-        "InlineButtonTypeCopy": ("copy_text", ("copy_text",)),
-        "InlineButtonTypeDisabled": ("disabled", ()),
-        "InlineButtonTypeGame": ("game", ()),
-        "InlineButtonTypeBuy": ("buy", ()),
-        "InlineButtonTypeUserProfile": ("user_profile", ("user_id",)),
-    }
-    if type_name in {"InlineButtonTypeUrl", "InlineButtonTypeWebView", "InlineButtonTypeUrlAuth"}:
-        if _safe_href(getattr(button_type, "url", "")) is None:
-            return '<tg-button type="disabled">{}</tg-button>'.format(
-                _render_text_node(getattr(button, "text", None))
-            )
-    if type_name == "InlineButtonTypeCallback":
-        attrs.append('type="callback_data"')
-        data = getattr(button_type, "data", b"")
+    type_name = button_type.__class__.__name__ if button_type is not None else ""
+    inner = _render_text_node(getattr(button, "text", None))
+
+    style = None
+    style_obj = getattr(button, "style", None)
+    if style_obj:
+        for name, field_name in (("primary", "bg_primary"), ("danger", "bg_danger"),
+                                 ("success", "bg_success"), ("link", "link")):
+            if getattr(style_obj, field_name, False):
+                style = name
+                break
+
+    name, attrs = "disabled", {}
+    url = getattr(button_type, "url", "")
+    if type_name in {"InlineButtonTypeUrl", "InlineButtonTypeWebView", "InlineButtonTypeUrlAuth"} \
+            and _safe_href(url) is None:
+        pass  # unsafe scheme: show as an inert pill
+    elif type_name == "InlineButtonTypeUrl":
+        name, attrs = "url", {"url": url}
+    elif type_name == "InlineButtonTypeWebView":
+        name, attrs = "web_app", {"url": url}
+    elif type_name == "InlineButtonTypeCallback":
+        name = "callback_data"
+        data = getattr(button_type, "data", b"") or b""
         try:
             text = data.decode("utf-8")
         except UnicodeDecodeError:
             text = None
         if text is not None and not any(ord(char) < 32 or ord(char) == 127 for char in text):
-            attrs.append(f'data="{_escape_html(text)}"')
+            attrs["data"] = text
         else:
-            encoded = base64.b64encode(data).decode("ascii")
-            attrs.append(f'data-base64="{encoded}"')
+            attrs["data-base64"] = base64.b64encode(data).decode("ascii")
         if getattr(button_type, "requires_password", False):
-            attrs.append('requires-password="true"')
+            attrs["requires-password"] = "true"
     elif type_name == "InlineButtonTypeUrlAuth":
-        attrs.append('type="login_url"')
-        attrs.append(f'url="{_escape_html(getattr(button_type, "url", ""))}"')
-        attrs.append(f'button-id="{_escape_html(getattr(button_type, "button_id", 0))}"')
+        name = "login_url"
+        attrs = {"url": url, "button-id": str(getattr(button_type, "button_id", 0))}
         fwd_text = getattr(button_type, "fwd_text", None)
         if fwd_text is not None:
-            attrs.append(f'forward-text="{_escape_html(fwd_text)}"')
+            attrs["forward-text"] = fwd_text
     elif type_name == "InlineButtonTypeSwitchInline":
-        same_peer = getattr(button_type, "same_peer", False)
+        peer_attrs = {
+            "InlineQueryPeerTypePM": "allow-user-chats",
+            "InlineQueryPeerTypeBotPM": "allow-bot-chats",
+            "InlineQueryPeerTypeChat": "allow-group-chats",
+            "InlineQueryPeerTypeMegagroup": "allow-group-chats",
+            "InlineQueryPeerTypeBroadcast": "allow-channel-chats",
+        }
         peer_types = getattr(button_type, "peer_types", None) or ()
+        attrs["query"] = getattr(button_type, "query", "")
         if peer_types:
-            attrs.append('type="switch_inline_query_chosen_chat"')
-            peer_attrs = {
-                "InlineQueryPeerTypePM": "allow-user-chats",
-                "InlineQueryPeerTypeBotPM": "allow-bot-chats",
-                "InlineQueryPeerTypeChat": "allow-group-chats",
-                "InlineQueryPeerTypeMegagroup": "allow-group-chats",
-                "InlineQueryPeerTypeBroadcast": "allow-channel-chats",
-            }
-            attrs.extend(peer_attrs[peer.__class__.__name__] for peer in peer_types
-                         if peer.__class__.__name__ in peer_attrs)
+            name = "switch_inline_query_chosen_chat"
+            for peer in peer_types:
+                flag = peer_attrs.get(peer.__class__.__name__)
+                if flag:
+                    attrs[flag] = "true"
+        elif getattr(button_type, "same_peer", False):
+            name = "switch_inline_query_current_chat"
         else:
-            attrs.append('type="switch_inline_query_current_chat"' if same_peer else 'type="switch_inline_query"')
-        attrs.append(f'query="{_escape_html(getattr(button_type, "query", ""))}"')
-    else:
-        name, fields = mapping.get(type_name, ("url", ("url",)))
-        attrs.append(f'type="{name}"')
-        for field_name in fields:
-            attr_name = "text" if type_name == "InlineButtonTypeCopy" else field_name.replace("_", "-")
-            attrs.append(f'{attr_name}="{_escape_html(getattr(button_type, field_name, ""))}"')
-
-    style = getattr(button, "style", None)
-    if style:
-        for name, field_name in (("primary", "bg_primary"), ("danger", "bg_danger"),
-                                 ("success", "bg_success"), ("link", "link")):
-            if getattr(style, field_name, False):
-                attrs.append(f'style="{name}"')
-                break
-    return "<tg-button {}>{}</tg-button>".format(
-        " ".join(attrs), _render_text_node(getattr(button, "text", None))
-    )
+            name = "switch_inline_query"
+    elif type_name == "InlineButtonTypeCopy":
+        name, attrs = "copy_text", {"text": getattr(button_type, "copy_text", "")}
+    elif type_name == "InlineButtonTypeUserProfile":
+        name, attrs = "user_profile", {"user-id": str(getattr(button_type, "user_id", 0))}
+    elif type_name == "InlineButtonTypeGame":
+        name = "game"
+    elif type_name == "InlineButtonTypeBuy":
+        name = "buy"
+    return _button_html(name, attrs, style, inner)
 
 
 def _render_block(block: object) -> str:
@@ -2416,18 +2579,18 @@ def _render_block(block: object) -> str:
             return "<h{}>{}</h{}>".format(level, _render_text_node(getattr(block, "text", None)), level)
         bold_blocks = {"PageBlockHeader", "PageBlockSubheader", "PageBlockSubtitle", "PageBlockTitle"}
         if block_type in bold_blocks:
-            return "<b>{}</b>\n".format(_render_text_node(getattr(block, "text", None)))
+            return _para("<b>{}</b>".format(_render_text_node(getattr(block, "text", None))))
         italic_blocks = {
             "PageBlockAuthorDate",
             "PageBlockFooter",
             "PageBlockKicker",
         }
         if block_type == "PageBlockAuthorDate":
-            return "<i>{}</i>\n".format(_render_text_node(getattr(block, "author", None)))
+            return _para("<i>{}</i>".format(_render_text_node(getattr(block, "author", None))))
         if block_type == "PageBlockFooter":
             return "<footer>{}</footer>".format(_render_text_node(getattr(block, "text", None)))
         if block_type in italic_blocks:
-            return "<i>{}</i>\n".format(_render_text_node(getattr(block, "text", None)))
+            return _para("<i>{}</i>".format(_render_text_node(getattr(block, "text", None))))
         if block_type in {"PageBlockBlockquote", "PageBlockPullquote"}:
             tag = "blockquote" if block_type == "PageBlockBlockquote" else "aside"
             content = _render_text_node(getattr(block, "text", None))
@@ -2435,21 +2598,31 @@ def _render_block(block: object) -> str:
                 getattr(block, "author", None) or getattr(block, "caption", None)
             )
             cite = f"<cite>{author}</cite>" if author else ""
-            return f"<{tag}>{content}{cite}</{tag}>"
+            attrs = ' expandable="true"' if tag == "blockquote" and getattr(block, "collapsed", False) else ""
+            return f"<{tag}{attrs}>{content}{cite}</{tag}>"
         if block_type == "PageBlockBlockquoteBlocks":
-            content = _render_blocks(getattr(block, "blocks", None)).strip()
-            return "<blockquote>{}</blockquote>\n".format(content) if content else ""
+            # blockquote holds inline content only: paragraphs are joined by "\n".
+            parts = []
+            for child in getattr(block, "blocks", None) or ():
+                if child.__class__.__name__ == "PageBlockParagraph":
+                    parts.append(_render_text_node(getattr(child, "text", None)))
+                else:
+                    parts.append(_render_block(child))
+            content = "\n".join(part for part in parts if part)
+            author = _render_text_node(getattr(block, "caption", None))
+            cite = f"<cite>{author}</cite>" if author else ""
+            return "<blockquote>{}{}</blockquote>".format(content, cite) if content else ""
         if block_type == "PageBlockDetails":
-            title = _render_text_node(getattr(block, "title", None))
+            title = _escape_html(_render_text_content(getattr(block, "title", None)))
             content = _render_blocks(getattr(block, "blocks", None))
             open_attr = " open" if getattr(block, "open", False) else ""
             return f"<details{open_attr}><summary>{title}</summary>{content}</details>"
         if block_type == "PageBlockCover":
             return _render_block(getattr(block, "cover", None))
         if block_type in {"PageBlockCollage", "PageBlockSlideshow"}:
-            return _render_blocks(getattr(block, "items", None)) or "[media]\n"
+            return _render_blocks(getattr(block, "items", None)) or _para("[media]")
         if block_type == "PageBlockAnchor":
-            return '<a name="{}"></a>\n'.format(_escape_html(getattr(block, "name", "")))
+            return '<a name="{}"></a>'.format(_escape_html(getattr(block, "name", "")))
         if block_type == "PageBlockTable":
             return _render_table(block)
         if block_type == "PageBlockRelatedArticles":
@@ -2478,8 +2651,7 @@ def _render_block(block: object) -> str:
             header = _render_block_link(author, getattr(block, "url", None))
             body = _render_blocks(getattr(block, "blocks", None)).strip()
             caption = _render_caption(getattr(block, "caption", None))
-            parts = [part for part in (header, body, caption) if part]
-            return "\n".join(parts) + ("\n" if parts else "")
+            return (_para(header) if header else "") + body + (_para(caption) if caption else "")
         if block_type in {"PageBlockChannel", "PageBlockMap", "InputPageBlockMap"}:
             label = "[map]" if block_type in {"PageBlockMap", "InputPageBlockMap"} else "[channel]"
             return _render_labeled_block(label, getattr(block, "caption", None))
@@ -2488,7 +2660,7 @@ def _render_block(block: object) -> str:
         if block_type == "PageBlockOrderedList":
             return _render_list(block, ordered=True)
         if block_type == "PageBlockDivider":
-            return "<hr>"
+            return "<hr/>"
         media_labels = {
             "PageBlockPhoto": ("[photo]", "photo_id", "photo"),
             "PageBlockVideo": ("[video]", "video_id", "video"),
@@ -2498,7 +2670,7 @@ def _render_block(block: object) -> str:
         if block_type in media_labels:
             return _render_media_block(block, *media_labels[block_type])
         if block_type == "PageBlockUnsupported":
-            return "[unsupported]\n"
+            return _para("[unsupported]")
     except Exception:
         return ""
 
@@ -2506,8 +2678,13 @@ def _render_block(block: object) -> str:
 
 
 def rich_message_to_html(rich_message: object) -> str:
+    """Convert a RichMessage TL object to canonical Rich HTML.
+
+    The output is a fixed point of the parser: feeding it to
+    ``parse_rich_html`` / ``render_rich_html`` or ``html_to_tl_blocks`` and
+    rendering again gives exactly the same string.
+    """
     validate_rich_message(rich_message)
-    """Convert a RichMessage TL object to an HTML string."""
     try:
         blocks = getattr(rich_message, "blocks", None) or ()
         return "".join(_render_block(block) for block in blocks).rstrip()
