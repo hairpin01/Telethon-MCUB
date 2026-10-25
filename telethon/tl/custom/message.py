@@ -1002,11 +1002,15 @@ class Message(ChatGetter, SenderGetter, TLObject):
                     and kwargs.get("rich_message") is None
                 ):
                     text = args[0] if args else kwargs.get("message") or ""
-                    kwargs["html"] = (
-                        await self._client._parse_message_text(
-                            str(text), kwargs.get("parse_mode", "html")
-                        )
-                    )[0]
+                    # The source is already rich markup: hand it to
+                    # edit_rich_message untouched. Running it through
+                    # `_parse_message_text` flattens it to plain text and
+                    # drops rich blocks such as <blockquote>.
+                    mode = str(kwargs.pop("parse_mode", None) or "html").lower()
+                    if mode in ("markdown", "md"):
+                        kwargs["markdown"] = str(text)
+                    else:
+                        kwargs["html"] = str(text)
                     args = ()
 
                 return await self._client.edit_rich_message(

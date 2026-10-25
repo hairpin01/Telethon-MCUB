@@ -1012,6 +1012,11 @@ _STRUCTURAL_KINDS = frozenset({
 # <tg-badge>/<tg-pill> are MCUB aliases for a non-clickable inline button.
 _BUTTON_TAGS = frozenset({"tg-button", "tg-badge", "tg-pill"})
 
+# Inline tags that open an implicit <p> when they appear outside any block.
+_TOP_INLINE_TAGS = (frozenset(_INLINE_WRAP) | _BUTTON_TAGS | frozenset({
+    "code", "a", "span", "tg-emoji", "tg-time", "tg-math", "tg-reference",
+}))
+
 _MAILTO = "mailto:"
 _TEL = "tel:"
 _TG_USER = "tg://user?id="
@@ -1105,7 +1110,28 @@ class RichHTMLParser(HTMLParser):
         if top and top.kind in ("collage", "slideshow"):
             # Collage/slideshow media items are added via _handle_media_void.
             pass
+        if top and top.kind == "paragraph":
+            # Block hoisted out of an open <p>: the source newlines around
+            # the block tag are layout whitespace, not content.
+            self._rstrip_items(top.items)
+            top.extra["after_block"] = True
         self.blocks.append(block)
+
+    @staticmethod
+    def _rstrip_items(items: list) -> None:
+        while items and isinstance(items[-1], TextPlain):
+            items[-1].text = items[-1].text.rstrip()
+            if items[-1].text:
+                break
+            items.pop()
+
+    @staticmethod
+    def _lstrip_items(items: list) -> None:
+        while items and isinstance(items[0], TextPlain):
+            items[0].text = items[0].text.lstrip()
+            if items[0].text:
+                break
+            items.pop(0)
 
     @staticmethod
     def _flush_parent_inline(frame: _Frame) -> None:
@@ -1138,9 +1164,26 @@ class RichHTMLParser(HTMLParser):
         return None
 
 
+    def _start_implicit(self) -> None:
+        """Top-level inline content (bare text, <b>, <mark>, <tg-button> ...)
+        gets an implicit paragraph instead of being dropped."""
+        if not self._stack:
+            self._push(_Frame("paragraph", "p", {}, {"implicit": True}))
+
+    def _end_implicit(self) -> None:
+        if self._stack and self._stack[0].extra.get("implicit"):
+            while self._stack:
+                self._close_top()
+
     def handle_starttag(self, tag: str, attrs: list) -> None:  # type: ignore[override]
         tag = tag.lower()
         ad = _attrs_d(attrs)
+
+        if not self._stack or self._stack[0].extra.get("implicit"):
+            if tag in _TOP_INLINE_TAGS:
+                self._start_implicit()
+            elif tag != "br":
+                self._end_implicit()
 
         if tag == "hr":
             self._emit(BlockDivider())
@@ -1532,6 +1575,8 @@ class RichHTMLParser(HTMLParser):
             return
 
         if kind in ("paragraph",):
+            self._lstrip_items(frame.items)
+            self._rstrip_items(frame.items)
             self._emit(BlockParagraph(frame.items))
             return
 
@@ -1737,10 +1782,18 @@ class RichHTMLParser(HTMLParser):
 
     def handle_data(self, data: str) -> None:  # type: ignore[override]
         target = self._inline_target()
+        if target is None and not self._stack and data.strip():
+            self._start_implicit()
+            target = self._inline_target()
         if target:
             if (target.kind in ("details", "li") and not target.items
                     and not data.strip()):
                 return  # indentation between child blocks
+            if target.extra.pop("after_block", False) and target.kind == "paragraph":
+                stripped = data.lstrip()
+                if len(stripped) != len(data) and target.items:
+                    stripped = " " + stripped
+                data = stripped
             target.append_text(data)
 
     def close(self) -> None:

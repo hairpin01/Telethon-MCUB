@@ -1663,37 +1663,14 @@ class MessageMethods:
                 reply_markup=self.build_reply_markup(buttons),
                 rich_message=input_rich_message,
             )
-            try:
-                exported = self.session.dc_id != message.dc_id
-                if exported:
-                    sender = await self._borrow_exported_sender(message.dc_id)
-                    try:
-                        return await self._call(sender, request)
-                    finally:
-                        await self._return_exported_sender(sender)
-                return await self(request)
-            except errors.BadRequestError as error:
-                if not fallback or not self._rich_message_unsupported(error):
-                    raise
-
-                if fallback_text is None:
-                    fallback_text, default_parse_mode = self._default_rich_fallback(
-                        html,
-                        markdown,
-                        text,
-                        input_rich_message,
-                    )
-                    if fallback_parse_mode is None:
-                        fallback_parse_mode = default_parse_mode
-
-                return await self.edit_message(
-                    message,
-                    fallback_text,
-                    parse_mode=fallback_parse_mode,
-                    link_preview=link_preview,
-                    buttons=buttons,
-                    invert_media=invert_media,
-                )
+            exported = self.session.dc_id != message.dc_id
+            if exported:
+                sender = await self._borrow_exported_sender(message.dc_id)
+                try:
+                    return await self._call(sender, request)
+                finally:
+                    await self._return_exported_sender(sender)
+            return await self(request)
 
         entity = await self.get_input_entity(entity)
         request = functions.messages.EditMessageRequest(
@@ -1707,32 +1684,8 @@ class MessageMethods:
             rich_message=input_rich_message,
         )
 
-        try:
-            result = await self(request)
-        except errors.BadRequestError as error:
-            if not fallback or not self._rich_message_unsupported(error):
-                raise
 
-            if fallback_text is None:
-                fallback_text, default_parse_mode = self._default_rich_fallback(
-                    html,
-                    markdown,
-                    text,
-                    input_rich_message,
-                )
-                if fallback_parse_mode is None:
-                    fallback_parse_mode = default_parse_mode
-
-            return await self.edit_message(
-                entity,
-                message,
-                fallback_text,
-                parse_mode=fallback_parse_mode,
-                link_preview=link_preview,
-                buttons=buttons,
-                schedule=schedule,
-                invert_media=invert_media,
-            )
+        result = await self(request)
 
         return self._get_response_message(request, result, entity)
 
