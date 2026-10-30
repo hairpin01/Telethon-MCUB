@@ -62,6 +62,54 @@ def test_richparser_inline_math_keeps_source():
     assert paragraph.text.texts[1].source == "x^2"
 
 
+def test_richparser_nested_blockquote():
+    message = richparser.html_to_input_rich_message(
+        "<blockquote>x<blockquote>y<blockquote>z</blockquote></blockquote></blockquote>"
+    )
+
+    outer = message.blocks[0]
+    assert isinstance(outer, tl_types.PageBlockBlockquoteBlocks)
+    assert isinstance(outer.blocks[0], tl_types.PageBlockParagraph)
+    assert outer.blocks[0].text.text == "x"
+
+    middle = outer.blocks[1]
+    assert isinstance(middle, tl_types.PageBlockBlockquoteBlocks)
+    assert middle.blocks[0].text.text == "y"
+
+    inner = middle.blocks[1]
+    assert isinstance(inner, tl_types.PageBlockBlockquote)
+    assert inner.text.text == "z"
+    assert len(message.blocks) == 1
+
+
+def test_richparser_nested_blockquote_order_and_whitespace():
+    message = richparser.html_to_input_rich_message(
+        "<blockquote>\n  <p>a</p>\n  <blockquote expandable>b</blockquote>\n  tail\n</blockquote>"
+    )
+
+    quote = message.blocks[0]
+    assert isinstance(quote, tl_types.PageBlockBlockquoteBlocks)
+    assert [type(b).__name__ for b in quote.blocks] == [
+        "PageBlockParagraph", "PageBlockBlockquote", "PageBlockParagraph",
+    ]
+    assert quote.blocks[0].text.text == "a"
+    assert quote.blocks[1].collapsed is True
+    assert quote.blocks[2].text.text == "tail"
+
+
+def test_richparser_flat_blockquote_unchanged():
+    message = richparser.html_to_input_rich_message("<blockquote>plain</blockquote>")
+
+    assert isinstance(message.blocks[0], tl_types.PageBlockBlockquote)
+
+
+def test_richparser_nested_blockquote_roundtrip():
+    html_in = "<blockquote>x<blockquote>y</blockquote></blockquote>"
+    out = richparser.render_rich_html(richparser.parse_rich_html(html_in))
+
+    assert out.count("<blockquote>") == 2
+
+
 def test_trailing_malformed_entities():
     """
     Similar to `test_malformed_entities`, but for the edge

@@ -11,7 +11,7 @@ Usage:
 
 Supported Bot API 10.1/10.2 blocks:
     Paragraph · SectionHeading · Preformatted · Footer · Divider
-    MathematicalExpression · Anchor · List · BlockQuotation
+    MathematicalExpression · Anchor · List · BlockQuotation (nestable)
     PullQuotation · Collage · Slideshow · Table · Details
     Map · Photo · Video · Audio · Animation · VoiceNote · Thinking
 
@@ -609,6 +609,34 @@ class BlockQuotation:
 
 
 @dataclass
+class BlockQuotationBlocks:
+    """<blockquote> with child blocks → InputRichBlockBlockQuotationBlocks
+
+    Used when a blockquote contains other blocks (nested <blockquote>,
+    lists, <pre>, …) instead of plain inline content only.
+    """
+    blocks: List[Any] = field(default_factory=list)
+    author: Optional[List[Inline]] = None
+    expandable: Optional[bool] = None
+
+    def to_html(self) -> str:
+        inner = "".join(block.to_html() for block in self.blocks)
+        if self.author:
+            inner += f"<cite>{_ih(self.author)}</cite>"
+        exp = ' expandable="true"' if self.expandable else ""
+        return f"<blockquote{exp}>{inner}</blockquote>"
+
+    def to_tl(self) -> dict:
+        d: dict = {
+            "_": "InputRichBlockBlockQuotationBlocks",
+            "blocks": [block.to_tl() for block in self.blocks],
+        }
+        if self.author:
+            d["author"] = _it(self.author)
+        return d
+
+
+@dataclass
 class BlockPullQuotation:
     """<aside> → InputRichBlockPullQuotation"""
     content: List[Inline] = field(default_factory=list)
@@ -975,7 +1003,7 @@ class BlockButtonRow:
 Block = Union[
     BlockParagraph, BlockHeading, BlockPreformatted, BlockFooter,
     BlockDivider, BlockMath, BlockAnchor, BlockList, BlockQuotation,
-    BlockPullQuotation, BlockCollage, BlockSlideshow, BlockTable,
+    BlockQuotationBlocks, BlockPullQuotation, BlockCollage, BlockSlideshow, BlockTable,
     BlockDetails, BlockMap, BlockPhoto, BlockVideo, BlockAudio,
     BlockAnimation, BlockVoiceNote, BlockThinking, BlockButtonRow,
 ]
@@ -1096,6 +1124,15 @@ class RichHTMLParser(HTMLParser):
             self._flush_parent_inline(top)
             top.extra.setdefault("blocks", []).append(block)
             return
+        if top and top.kind == "blockquote" and (
+            top.extra.get("blocks") or not isinstance(block, BlockParagraph)
+        ):
+            # A blockquote holds RichText until it receives a non-paragraph
+            # child block (e.g. a nested <blockquote>); from then on it is
+            # emitted as PageBlockBlockquoteBlocks with child PageBlocks.
+            self._flush_quote_inline(top)
+            top.extra.setdefault("blocks", []).append(block)
+            return
         if top and top.kind in ("blockquote", "aside", "td", "th"):
             # These TL shapes hold RichText rather than child PageBlocks.
             if isinstance(block, BlockParagraph):
@@ -1132,6 +1169,18 @@ class RichHTMLParser(HTMLParser):
             if items[0].text:
                 break
             items.pop(0)
+
+    @classmethod
+    def _flush_quote_inline(cls, frame: _Frame) -> None:
+        """Move pending inline text of a blockquote into a paragraph block.
+
+        Whitespace at a block boundary is layout, not content.
+        """
+        items, frame.items = frame.items, []
+        cls._lstrip_items(items)
+        cls._rstrip_items(items)
+        if items and _inline_plain(items).strip():
+            frame.extra.setdefault("blocks", []).append(BlockParagraph(items))
 
     @staticmethod
     def _flush_parent_inline(frame: _Frame) -> None:
@@ -1592,7 +1641,11 @@ class RichHTMLParser(HTMLParser):
         if kind == "blockquote":
             exp = frame.extra.get("expandable")
             author = frame.extra.get("author_items")
-            self._emit(BlockQuotation(frame.items, author, exp))
+            if frame.extra.get("blocks"):
+                self._flush_quote_inline(frame)
+                self._emit(BlockQuotationBlocks(frame.extra["blocks"], author, exp))
+            else:
+                self._emit(BlockQuotation(frame.items, author, exp))
             return
 
         if kind == "aside":
@@ -2084,6 +2137,11 @@ def _tl_block(value: Any):
             _tl_text(value.get("text")),
             _tl_text(value.get("author")),
             collapsed=True if value.get("collapsed") else None,
+        )
+    if kind == "InputRichBlockBlockQuotationBlocks":
+        return types.PageBlockBlockquoteBlocks(
+            [_tl_block(block) for block in value.get("blocks", [])],
+            _tl_text(value.get("author")),
         )
     if kind == "InputRichBlockPullQuotation":
         return types.PageBlockPullquote(
