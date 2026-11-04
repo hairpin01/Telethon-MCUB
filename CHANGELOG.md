@@ -1,5 +1,22 @@
 # Telethon-MCUB Changelog
 
+## v1.44.6 (2026-11-04)
+
+- **Ephemeral message high-level API**: added seven new methods on `TelegramClient` covering the full `ephemeral.*` MTProto namespace:
+  - `send_ephemeral_message(peer, receiver, message, ...)` — send a message visible only to `receiver` inside `peer`; supports `parse_mode`, `formatting_entities`, `reply_to`, `buttons`, `random_id`, `noforwards`, `invert_media`.
+  - `edit_ephemeral_message(peer, receiver, message, text, ...)` — edit a previously sent ephemeral message.
+  - `delete_ephemeral_message(peer, receiver, message)` — delete a single ephemeral message for a specific user.
+  - `get_welcome_messages(peer, hash=0)` — fetch the welcome-message list of a chat; returns `ephemeral.WelcomeMessages` or `ephemeral.WelcomeMessagesNotModified`.
+  - `delete_welcome_message(peer, message_id)` — remove one welcome message.
+  - `delete_all_welcome_messages(peer)` — clear all welcome messages from a chat.
+  - `get_ephemeral_callback_answer(peer, message_id, data=None)` — retrieve the callback-query answer for an inline button on an ephemeral message.
+  - `report_ephemeral_message(peer, message_id, option, message='')` — report an ephemeral message; returns `ReportResult`.
+  - All methods resolve entities the same way as their `messages.*` counterparts and delegate entity resolution of `receiver` to the generated `TLRequest.resolve()`.
+
+- **`events.EphemeralMessage`**: new event builder that fires on `UpdateNewEphemeralMessage`. Filters: `chats`, `blacklist_chats`, `from_users`, `receivers`, `incoming`, `outgoing`, `pattern`. The inner `Event` exposes `text`/`raw_text`, `sender_id`, `receiver_id`, `is_out`, `is_welcome`, `id`, and three async helpers — `respond(text, ...)`, `edit(text, ...)`, `delete()` — that call the matching high-level methods above.
+
+- **`events.EphemeralMessageEdited`**: sibling event builder that fires on `UpdateEditEphemeralMessage`. Identical interface to `EphemeralMessage`; `event.edited` is always `True`.
+
 ## v1.44.5 (2026-10-23)
 
 - **Inline rich buttons**: `<tg-button>` inside text (`<p>`, headings, list items, table cells, ...) now parses to `TextButton` and renders back, so a rounded "pill" can be used like `<mark>`: `<tg-button type="disabled" style="success">v1.3.0</tg-button>`. `type="disabled"` makes a non-clickable badge; every other button type works inline too. `<tg-badge>` / `<tg-pill>` are shortcuts for a disabled inline button. Without `type`, it is inferred (`url` -> url, `data` -> callback_data, otherwise disabled). Nested buttons keep the text of the inner one.

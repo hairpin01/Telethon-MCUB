@@ -11,6 +11,7 @@ from .inlinequery import InlineQuery
 from .joinrequest import JoinRequest
 from .botupdate import BotUpdate
 from .guestmessage import GuestMessage
+from .ephemeral import EphemeralMessage, EphemeralMessageEdited
 
 _HANDLERS_ATTRIBUTE = "__tl.handlers"
 
