@@ -390,7 +390,7 @@ class GuestMessage(EventBuilder):
             message._finish_init(self._client, self._entities, self._input_chat)
             return message
 
-        async def reply(self, text="", **kwargs):
+        async def reply(self, text="", *, ephemeral=False, receiver=None, **kwargs):
             """
             Replies to the message.
 
@@ -405,6 +405,13 @@ class GuestMessage(EventBuilder):
             Args:
                 text (`str`):
                     The text of the message.
+
+                ephemeral (`bool`, optional):
+                    If ``True``, sends an ephemeral reply visible only to the
+                    recipient (using `ephemeral_reply`).
+
+                receiver (`entity`, optional):
+                    Target recipient when ``ephemeral=True``.
 
                 kwargs:
                     `parse_mode`, `buttons`, `link_preview`, `title` for
@@ -432,6 +439,9 @@ class GuestMessage(EventBuilder):
                         )
                         await message.edit('Hello! (edited)')
             """
+            if ephemeral:
+                return await self.ephemeral_reply(text, receiver=receiver, **kwargs)
+
             if self.is_query:
                 return await self.answer(text=text, **kwargs)
 
@@ -596,6 +606,47 @@ class GuestMessage(EventBuilder):
             Alias for `rich_reply`.
             """
             return await self.rich_reply(*args, **kwargs)
+
+        async def ephemeral_reply(self, text, *, receiver=None, **kwargs):
+            """
+            Replies to the event with an ephemeral message, visible only to
+            ``receiver`` (by default, the user who invoked the guest bot or sent the message).
+
+            Args:
+                text (`str`):
+                    Text of the ephemeral message.
+                receiver (`entity`, optional):
+                    The user who will see the message. Defaults to
+                    ``self.guestchat_via_from`` or ``self.sender_id``.
+                **kwargs:
+                    Forwarded to `client.send_ephemeral_message
+                    <telethon.client.messages.MessageMethods.send_ephemeral_message>`.
+
+            Returns:
+                The sent ephemeral `Message <telethon.tl.custom.message.Message>`.
+            """
+            target_receiver = receiver
+            if target_receiver is None:
+                if self.guestchat_via_from:
+                    target_receiver = self.guestchat_via_from
+                elif self.sender_id:
+                    target_receiver = self.sender_id
+                elif getattr(self.message, "from_id", None):
+                    target_receiver = self.message.from_id
+
+            kwargs.setdefault("reply_to", self.message.id)
+            return await self._client.send_ephemeral_message(
+                await self.get_input_chat(),
+                target_receiver,
+                text,
+                **kwargs,
+            )
+
+        async def reply_ephemeral(self, *args, **kwargs):
+            """
+            Alias for `ephemeral_reply`.
+            """
+            return await self.ephemeral_reply(*args, **kwargs)
 
         async def respond(self, text="", **kwargs):
             """

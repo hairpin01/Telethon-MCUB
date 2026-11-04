@@ -17,6 +17,8 @@
 
 - **`events.EphemeralMessageEdited`**: sibling event builder that fires on `UpdateEditEphemeralMessage`. Identical interface to `EphemeralMessage`; `event.edited` is always `True`.
 
+- **Ephemeral replies in `events.GuestMessage`**: added `ephemeral_reply(...)` (and `reply_ephemeral(...)`) to `GuestMessage.Event` to send an ephemeral reply bound to the triggering message via `client.send_ephemeral_message`. Also added `ephemeral=True` support to `GuestMessage.Event.reply(...)`. Receiver is automatically resolved from `guestchat_via_from` or message sender/from_id.
+
 ## v1.44.5 (2026-10-23)
 
 - **Inline rich buttons**: `<tg-button>` inside text (`<p>`, headings, list items, table cells, ...) now parses to `TextButton` and renders back, so a rounded "pill" can be used like `<mark>`: `<tg-button type="disabled" style="success">v1.3.0</tg-button>`. `type="disabled"` makes a non-clickable badge; every other button type works inline too. `<tg-badge>` / `<tg-pill>` are shortcuts for a disabled inline button. Without `type`, it is inferred (`url` -> url, `data` -> callback_data, otherwise disabled). Nested buttons keep the text of the inner one.
