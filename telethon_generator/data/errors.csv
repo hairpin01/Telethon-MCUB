@@ -301,7 +301,7 @@ PASSWORD_RECOVERY_NA,400,"No email was set, can't recover password via email"
 PASSWORD_REQUIRED,400,The account must have 2-factor authentication enabled (a password) before this method can be used
 PASSWORD_TOO_FRESH_X,400,The password was added too recently and {seconds} seconds must pass before using the method
 PAYMENT_PROVIDER_INVALID,400,The payment provider was not recognised or its token was invalid
-PEER_FLOOD,400,Too many requests
+PEER_FLOOD,400,"The account is limited (spam-reported) and cannot message non-contacts; account-wide with no defined duration, so retrying will not help. Check @SpamBot"
 PEER_HISTORY_EMPTY,400,
 PEER_ID_INVALID,400,"An invalid Peer was used. Make sure to pass the right peer type and that the value is valid (for instance, bots cannot start conversations)"
 PEER_ID_NOT_SUPPORTED,400,The provided peer ID is not supported
@@ -474,7 +474,7 @@ UNTIL_DATE_INVALID,400,That date cannot be specified in this request (try using 
 UPDATE_APP_TO_LOGIN,406,
 URL_INVALID,400,The URL used was invalid (e.g. when answering a callback with a URL that's not t.me/yourbot or your game's URL)
 USAGE_LIMIT_INVALID,400,The specified usage limit is invalid
-USERNAME_INVALID,400,"Nobody is using this username, or the username is unacceptable. If the latter, it must match r""[a-zA-Z][\w\d]{3,30}[a-zA-Z\d]"""
+USERNAME_INVALID,400,Nobody is using this username or the username is unacceptable
 USERNAME_NOT_MODIFIED,400,The username is not different from the current username
 USERNAME_NOT_OCCUPIED,400,The username is not in use by anyone else yet
 USERNAME_OCCUPIED,400,The username is already taken
