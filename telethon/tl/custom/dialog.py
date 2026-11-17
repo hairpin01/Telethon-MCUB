@@ -74,22 +74,28 @@ class Dialog:
         # Both entities and messages being dicts {ID: item}
         self._client = client
         self.dialog = dialog
-        self.pinned = bool(dialog.pinned)
-        self.folder_id = dialog.folder_id
-        self.archived = dialog.folder_id is not None
+        self.pinned = bool(getattr(dialog, "pinned", False))
+        self.folder_id = getattr(dialog, "folder_id", None)
+        self.archived = self.folder_id is not None
         self.message = message
         self.date = getattr(self.message, "date", None)
-
-        self.entity = entities[utils.get_peer_id(dialog.peer)]
+        _community_id = getattr(dialog, "community_id", None)
+        if _community_id:
+            _peer = types.PeerChannel(_community_id)
+        else:
+            _peer = dialog.peer
+        self.entity = entities[utils.get_peer_id(_peer)]
         self.input_entity = utils.get_input_peer(self.entity)
         self.id = utils.get_peer_id(self.entity)  # ^ May be InputPeerSelf()
         self.name = self.title = utils.get_display_name(self.entity)
+        self.unread_count = getattr(dialog, "unread_count", None)
+        self.unread_mentions_count = getattr(dialog, "unread_mentions_count", None)
 
-        self.unread_count = dialog.unread_count
-        self.unread_mentions_count = dialog.unread_mentions_count
-
-        self.draft = Draft(client, self.entity, self.dialog.draft)
-
+        _draft = getattr(dialog, "draft", None)
+        if _draft is not None:
+            self.draft = Draft(client, self.entity, _draft)
+        else:
+            self.draft = None
         self.is_user = isinstance(self.entity, types.User)
         self.is_group = isinstance(self.entity, (types.Chat, types.ChatForbidden)) or (
             isinstance(self.entity, types.Channel) and self.entity.megagroup

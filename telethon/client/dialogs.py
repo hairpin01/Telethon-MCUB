@@ -69,25 +69,44 @@ class _DialogsIter(RequestIter):
 
         for d in r.dialogs:
             # We check the offset date here because Telegram may ignore it
-            message = messages.get(_dialog_message_key(d.peer, d.top_message))
+            peer = getattr(d, "peer", None)
+            top_message = getattr(d, "top_message", None)
+            if peer is None:
+                # dialogCommunity entries (shared communities, which are
+                # dialogs themselves) carry no peer of their own; the
+                # dialog points to the community channel instead
+                community_id = getattr(d, "community_id", None)
+                if not community_id:
+                    continue
+                peer = types.PeerChannel(community_id)
+                top_message = None
+            message = messages.get(_dialog_message_key(peer, top_message))
             if self.offset_date:
                 date = getattr(message, "date", None)
                 if not date or date.timestamp() > self.offset_date.timestamp():
                     continue
 
-            peer_id = utils.get_peer_id(d.peer)
+            peer_id = utils.get_peer_id(peer)
             if peer_id not in self.seen:
                 self.seen.add(peer_id)
                 if peer_id not in entities:
-                    # > In which case can a UserEmpty appear in the list of banned members?
-                    # > In a very rare cases. This is possible but isn't an expected behavior.
-                    # Real world example: https://t.me/TelethonChat/271471
-                    continue
+                    # Community dialogs: try to resolve the community
+                    # channel so that it can be used as a normal dialog
+                    if getattr(d, "community_id", None):
+                        try:
+                            _ent = await self.client.get_entity(peer)
+                        except Exception:
+                            _ent = None
+                        if _ent:
+                            entities[peer_id] = _ent
+                            self.client._mb_entity_cache.extend([], [_ent])
+                    if peer_id not in entities:
+                        continue
 
                 cd = custom.Dialog(self.client, d, entities, message)
                 if cd.dialog.pts:
                     self.client._message_box.try_set_channel_state(
-                        utils.get_peer_id(d.peer, add_mark=False), cd.dialog.pts
+                        utils.get_peer_id(peer, add_mark=False), cd.dialog.pts
                     )
 
                 if not self.ignore_migrated or getattr(cd.entity, "migrated_to", None) is None:
@@ -111,8 +130,13 @@ class _DialogsIter(RequestIter):
             filter(
                 None,
                 (
-                    messages.get(_dialog_message_key(d.peer, d.top_message))
+                    messages.get(
+                        _dialog_message_key(
+                            d.peer, d.top_message
+                        )
+                    )
                     for d in reversed(r.dialogs)
+                    if hasattr(d, "peer") and d.peer is not None
                 ),
             ),
             None,
