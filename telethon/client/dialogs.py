@@ -104,7 +104,7 @@ class _DialogsIter(RequestIter):
                         continue
 
                 cd = custom.Dialog(self.client, d, entities, message)
-                if cd.dialog.pts:
+                if getattr(cd.dialog, "pts", None):
                     self.client._message_box.try_set_channel_state(
                         utils.get_peer_id(peer, add_mark=False), cd.dialog.pts
                     )
